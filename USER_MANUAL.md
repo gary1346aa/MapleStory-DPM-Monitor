@@ -1,6 +1,6 @@
 # 🎮 MapleStory Boss DPM Monitor - User Manual
 
-Welcome to the **MapleStory Boss DPM Monitor**, a high-precision, GPU-accelerated tool designed to provide real-time combat analytics and professional performance reporting.
+Welcome to the **MapleStory Boss DPM Monitor**, a high-precision, GPU-accelerated tool.
 
 ---
 

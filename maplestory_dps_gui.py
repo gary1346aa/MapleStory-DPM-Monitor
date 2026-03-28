@@ -315,7 +315,7 @@ class HUDOverlay(tk.Toplevel):
 class BossDPSMonitorGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("MapleStory Boss DPS Monitor")
+        self.root.title("MapleStory Boss DPM Monitor v20260329.1")
         self.root.geometry("650x1500")
         self.font_name = "Google Sans"
         try:
