@@ -4,24 +4,15 @@ Welcome to the **MapleStory Boss DPM Monitor**, a high-precision, GPU-accelerate
 
 ---
 
-## 🛠️ 1. Essential First Step: Font Installation
-For the interface to display correctly with its premium typography, you **must** install the **Google Sans** font provided in the package.
-
-1.  Locate the file **`GoogleSans-VariableFont_GRAD,opsz,wght.ttf`** inside the extracted folder.
-2.  Right-click the file and choose **"Install for all users"**.
-3.  Restart the application if it was already open.
-    *   *Note: If the font is missing, the application will fall back to Segoe UI, but the layout is optimized for Google Sans.*
-
----
-
-## 🚀 2. Getting Started
+## 🚀 1. Getting Started
 
 ### Launching the App
 1.  Extract the provided `.zip` package.
-2.  Run **`MapleStory_DPS_Ultimate.exe`**.
+2.  Run **`MapleStory_DPM_v[VERSION].exe`**.
 3.  Check the **System Status Bar** at the bottom:
     *   **Engine: Ready** means the OCR is loaded.
     *   **HW: NVIDIA GeForce RTX 3080** (or your GPU) indicates GPU acceleration is active.
+    *   *Note: The premium **Google Sans** font is automatically loaded by the application. No manual installation is required.*
 
 ### Setting Up the Capture
 To track boss health, the app needs to know where the HP bar is:
@@ -33,7 +24,7 @@ To track boss health, the app needs to know where the HP bar is:
 
 ---
 
-## ⌨️ 3. Hotkeys & Controls
+## ⌨️ 2. Hotkeys & Controls
 
 | Hotkey | Action | Description |
 | :--- | :--- | :--- |
@@ -48,7 +39,7 @@ To track boss health, the app needs to know where the HP bar is:
 
 ---
 
-## 📊 4. Understanding the Metrics
+## 📊 3. Understanding the Metrics
 
 *   **Remaining HP**: The last detected health of the boss.
 *   **Real-time DPS**: Your damage per second calculated over the last few frames.
@@ -58,7 +49,7 @@ To track boss health, the app needs to know where the HP bar is:
 
 ---
 
-## 🛡️ 5. Smart Analytics (Outlier Protection)
+## 🛡️ 4. Smart Analytics (Outlier Protection)
 The monitor includes intelligent logic to filter out "visual noise" and OCR glitches:
 *   **HP Jitter Filter**: If the boss's HP suddenly "increases" by more than 50,000, the data is ignored.
 *   **Glitched Drop Filter**: If the HP drops by more than 500,000 in a single frame (faster than physically possible), it is ignored.
@@ -66,7 +57,7 @@ The monitor includes intelligent logic to filter out "visual noise" and OCR glit
 
 ---
 
-## 📈 6. Generating Reports
+## 📈 5. Generating Reports
 After your fight, click **"GENERATE PNG REPORT"**. 
 *   The app will create a professional graph showing your **DPS Curve** throughout the fight.
 *   Reports are saved in the same folder as the application with the name `Boss_Report_YYYYMMDD_HHMMSS.png`.
