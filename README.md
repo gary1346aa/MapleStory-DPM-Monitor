@@ -39,16 +39,5 @@ A high-precision, GPU-accelerated combat analytics tool for MapleStory, featurin
    ```bash
    python maplestory_dps_gui.py
    ```
-
-## 📊 DPM Color Grading
-
-The HUD automatically color-codes your Average DPM for instant feedback:
-- 🤍 **0-4M**: Standard
-- 💛 **4-6M**: Elevated
-- 💙 **6-8M**: Elite
-- 💜 **8-10M**: Master
-- 💚 **12-14M**: Grandmaster
-- 💖 **14M+**: Legendary
-
 ---
 *Developed for MapleStory players seeking professional-grade combat analytics.*
