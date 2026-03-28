@@ -334,8 +334,6 @@ class BossDPSMonitorGUI:
         self.combat_status_var = tk.StringVar(value="Combat: IDLE")
         self.perf_var = tk.StringVar(value="Actual Hz: -")
 
-        self.current_avg_dps = 0.0
-
         self.setup_ui()
         self.reader = None
         threading.Thread(target=self.init_ocr, daemon=True).start()
@@ -718,17 +716,9 @@ class BossDPSMonitorGUI:
     def is_outlier(self, hp, now):
         if self.last_detected_hp is None:
             return False
-        # Rule 1: Reject HP increase over 50,000
-        if hp > self.last_detected_hp + 50000:
+        # Rule 1: Reject HP increase over 50,000 or decrease over 500000
+        if hp > self.last_detected_hp + 50000 or hp < self.last_detected_hp - 500000:
             return True
-
-        # Rule 2: Reject drop rates significantly higher than Average DPS (5x threshold)
-        if self.is_in_combat and hp < self.last_detected_hp and hp > 0:
-            dt = now - self.hp_history[-1][0] if self.hp_history else 0.1
-            drop_rate = (self.last_detected_hp - hp) / max(0.001, dt)
-            avg_dps = getattr(self, "current_avg_dps", 0.0)
-            if avg_dps > 1000 and drop_rate > avg_dps * 5:
-                return True
         return False
 
     def generate_report(self):
