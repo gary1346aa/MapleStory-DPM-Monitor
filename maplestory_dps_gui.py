@@ -318,8 +318,51 @@ class HUDOverlay(tk.Toplevel):
 class BossDPSMonitorGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("MapleStory Boss DPM Monitor v20260329.1")
-        self.root.geometry("650x1500")
+
+        # System: Obtain exact Windows Scale Factor (e.g., 175% = 1.75)
+        # We use your current 1.75x setup as the "REFERENCE" for the satisfying look
+        REFERENCE_SCALE = 1.75
+        try:
+            from ctypes import wintypes
+
+            ctypes.windll.shcore.SetProcessDpiAwareness(1)
+            h_mon = ctypes.windll.user32.MonitorFromPoint(wintypes.POINT(0, 0), 1)
+            scale_val = ctypes.c_uint()
+            ctypes.windll.shcore.GetScaleFactorForMonitor(
+                h_mon, ctypes.byref(scale_val)
+            )
+            current_scaling = scale_val.value / 100.0
+        except:
+            current_scaling = self.root.winfo_fpixels("1i") / 72.0
+
+        screen_w = self.root.winfo_screenwidth()
+        screen_h = self.root.winfo_screenheight()
+
+        # UI: 'Looks the same' Logic (Proportional to scaling_factor/resolution)
+        # Reference Baseline: 3840x2160 (4K) @ 1.75 scaling
+        # We want the window to occupy the same PERCENTAGE of the screen
+        REF_W, REF_H = 3840.0, 2160.0
+        REF_SCALE = 1.75
+
+        # Calculate how much of the screen the "satisfying" UI takes up (percentage)
+        # Width: 650 / 3840 = ~16.9% | Height: 1500 / 2160 = ~69.4%
+        W_RATIO = 650.0 / REF_W
+        H_RATIO = 1500.0 / REF_H
+
+        # Physical window size: strictly tied to screen resolution
+        win_w = int(screen_w * W_RATIO)
+        # We clamp height to 90% of screen as a safety limit
+        win_h = int(min(screen_h * H_RATIO, screen_h * 0.9))
+
+        # Calculate internal element scaling (ui_scale)
+        # This is based on the logical density of the workspace
+        logical_h = screen_h / current_scaling
+        ref_logical_h = REF_H / REF_SCALE
+        self.ui_scale = logical_h / ref_logical_h
+
+        self.root.title("MapleStory Boss DPM Monitor v20260329.2")
+        self.root.geometry(f"{win_w}x{win_h}")
+
         self.font_name = "Google Sans"
         try:
             test_font = tkfont.Font(family=self.font_name)
@@ -328,17 +371,20 @@ class BossDPSMonitorGUI:
         except:
             self.font_name = "Segoe UI"
 
-        self.font_large = (self.font_name, 16, "bold")
-        self.font_medium = (self.font_name, 12)
-        self.font_small = (self.font_name, 10)
+        # Scaling Fonts: Proportional to logical height
+        self.font_large = (self.font_name, int(16 * self.ui_scale), "bold")
+        self.font_medium = (self.font_name, int(12 * self.ui_scale))
+        self.font_small = (self.font_name, int(10 * self.ui_scale))
 
-        # UI Styling: Consistent modern look
+        # UI Styling: Modern proportional look
         style = ttk.Style()
-        style.configure(".", font=(self.font_name, 10))
-        style.configure("TLabel", font=(self.font_name, 10))
-        style.configure("TLabelframe.Label", font=(self.font_name, 11, "bold"))
-        style.configure("TButton", font=(self.font_name, 10))
-        style.configure("TCombobox", font=(self.font_name, 10))
+        style.configure(".", font=(self.font_name, int(10 * self.ui_scale)))
+        style.configure("TLabel", font=(self.font_name, int(10 * self.ui_scale)))
+        style.configure(
+            "TLabelframe.Label", font=(self.font_name, int(11 * self.ui_scale), "bold")
+        )
+        style.configure("TButton", font=(self.font_name, int(10 * self.ui_scale)))
+        style.configure("TCombobox", font=(self.font_name, int(10 * self.ui_scale)))
 
         # State: Core combat variables
         self.hp_history = []
@@ -378,106 +424,13 @@ class BossDPSMonitorGUI:
 
     # UI: Building the main control panel
     def setup_ui(self):
-        main_container = ttk.Frame(self.root)
-        main_container.pack(fill="both", expand=True)
-
-        content = ttk.Frame(main_container)
-        content.pack(fill="both", expand=True)
-
-        pad = {"padx": 30, "pady": 12}
-        settings_f = ttk.LabelFrame(content, text=" Configuration ")
-        settings_f.pack(fill="x", **pad)
-
-        self.window_list = ttk.Combobox(settings_f, width=50)
-        self.window_list.pack(padx=10, pady=5)
-        # Event: Clear region when a new window is selected
-        self.window_list.bind("<<ComboboxSelected>>", self.on_window_change)
-
-        btn_f = ttk.Frame(settings_f)
-        btn_f.pack(fill="x", padx=10, pady=5)
-        ttk.Button(
-            btn_f, text="Refresh Window List", command=self.refresh_windows
-        ).pack(side="left", fill="x", expand=True, padx=5)
-        ttk.Button(
-            btn_f, text="Set Capture Region (Crop)", command=self.set_region
-        ).pack(side="left", fill="x", expand=True, padx=5)
-
-        # Region Status: Styled pill-style tag
-        self.region_display = tk.Label(
-            settings_f,
-            text="REGION NOT SET",
-            font=(self.font_name, 9, "bold"),
-            fg="#C62828",
-            bg="#FFEBEE",
-            padx=12,
-            pady=4,
-            relief="flat",
-            borderwidth=0,
-        )
-        self.region_display.pack(pady=8)
-
-        freq_f = ttk.Frame(settings_f)
-        freq_f.pack(fill="x", pady=5)
-        ttk.Label(freq_f, text="Freq (Hz):").pack(side="left", padx=10)
-        self.freq_var = tk.DoubleVar(value=1.0)
-        ttk.Scale(
-            freq_f, from_=1.0, to=10.0, variable=self.freq_var, orient="horizontal"
-        ).pack(side="left", fill="x", expand=True, padx=10)
-        ttk.Label(freq_f, textvariable=self.freq_var, width=4).pack(side="left")
-        ttk.Label(
-            settings_f,
-            text="F7: Toggle Monitoring  |  F8: Reset  |  F9: Show/Hide HUD",
-            font=(self.font_name, 10),
-            foreground="gray",
-        ).pack(pady=2)
-
-        dash_f = ttk.LabelFrame(content, text=" Combat Data Dashboard ")
-        dash_f.pack(fill="x", **pad)
-
-        metrics_f = ttk.Frame(dash_f)
-        metrics_f.pack(fill="x", padx=40, pady=15)
-        metrics_f.columnconfigure(1, weight=1)
-
-        m_config = [
-            ("Remaining HP", self.hp_val_var, "red"),
-            ("Real-time DPS", self.rt_dps_val_var, None),
-            ("Real-time DPM", self.rt_dpm_val_var, None),
-            ("SEP", None, None),
-            ("Combat Time", self.combat_time_val_var, None),
-            ("Remaining Time", self.rem_time_val_var, "#673ab7"),
-            ("Total Damage", self.total_dmg_val_var, "#388e3c"),
-            ("Average DPM", self.avg_dpm_val_var, "#1976d2"),
-        ]
-
-        row_idx = 0
-        for name, var, color in m_config:
-            if name == "SEP":
-                ttk.Separator(metrics_f, orient="horizontal").grid(
-                    row=row_idx, column=0, columnspan=2, sticky="ew", pady=15
-                )
-                row_idx += 1
-                continue
-            lbl = ttk.Label(metrics_f, text=f"{name}:", font=self.font_large)
-            val = ttk.Label(metrics_f, textvariable=var, font=self.font_large)
-            if color:
-                val.config(foreground=color)
-                if name == "Remaining HP":
-                    lbl.config(foreground=color)
-            lbl.grid(row=row_idx, column=0, sticky="w", pady=8)
-            val.grid(row=row_idx, column=1, sticky="e", pady=8)
-            row_idx += 1
-
-        ttk.Button(
-            content, text="GENERATE PNG REPORT", command=self.generate_report
-        ).pack(padx=30, pady=5, fill="x")
-
-        # UI: System status bar with pixel-perfect spacing
+        # Create Status Bar first so it's pinned to the bottom
         stat_container = ttk.Frame(self.root)
         stat_container.pack(side="bottom", fill="x", padx=10, pady=(0, 2))
         stat_container.columnconfigure(2, weight=1)
 
-        st_font = (self.font_name, 9)
-        st_bold = (self.font_name, 9, "bold")
+        st_font = (self.font_name, int(9 * self.ui_scale))
+        st_bold = (self.font_name, int(9 * self.ui_scale), "bold")
 
         ttk.Label(stat_container, textvariable=self.status_var, font=st_font).grid(
             row=0, column=0, sticky="w"
@@ -502,7 +455,135 @@ class BossDPSMonitorGUI:
             foreground="#FF4444",
         ).grid(row=1, column=2, sticky="e", pady=0)
 
+        # Create a Canvas with a Scrollbar for the main content
+        self.main_canvas = tk.Canvas(self.root, highlightthickness=0)
+        self.scrollbar = ttk.Scrollbar(
+            self.root, orient="vertical", command=self.main_canvas.yview
+        )
+        self.scrollable_frame = ttk.Frame(self.main_canvas)
+
+        self.scrollable_frame.bind(
+            "<Configure>",
+            lambda e: self.main_canvas.configure(
+                scrollregion=self.main_canvas.bbox("all")
+            ),
+        )
+
+        self.canvas_window = self.main_canvas.create_window(
+            (0, 0), window=self.scrollable_frame, anchor="nw"
+        )
+        self.main_canvas.bind("<Configure>", self._on_canvas_configure)
+        self.main_canvas.configure(yscrollcommand=self.scrollbar.set)
+
+        self.scrollbar.pack(side="right", fill="y")
+        self.main_canvas.pack(side="top", fill="both", expand=True)
+
+        # Bind mousewheel to scrolling
+        self.main_canvas.bind_all("<MouseWheel>", self._on_mousewheel)
+
+        content = self.scrollable_frame
+        pad_val = int(30 * self.ui_scale)
+        inner_pad = int(12 * self.ui_scale)
+        pad = {"padx": pad_val, "pady": inner_pad}
+
+        settings_f = ttk.LabelFrame(content, text=" Configuration ")
+        settings_f.pack(fill="x", **pad)
+
+        self.window_list = ttk.Combobox(settings_f, width=int(50 * self.ui_scale))
+        self.window_list.pack(padx=10, pady=5)
+        self.window_list.bind("<<ComboboxSelected>>", self.on_window_change)
+
+        btn_f = ttk.Frame(settings_f)
+        btn_f.pack(fill="x", padx=10, pady=5)
+        ttk.Button(
+            btn_f, text="Refresh Window List", command=self.refresh_windows
+        ).pack(side="left", fill="x", expand=True, padx=5)
+        ttk.Button(
+            btn_f, text="Set Capture Region (Crop)", command=self.set_region
+        ).pack(side="left", fill="x", expand=True, padx=5)
+
+        self.region_display = tk.Label(
+            settings_f,
+            text="REGION NOT SET",
+            font=(self.font_name, int(9 * self.ui_scale), "bold"),
+            fg="#C62828",
+            bg="#FFEBEE",
+            padx=12,
+            pady=4,
+            relief="flat",
+            borderwidth=0,
+        )
+        self.region_display.pack(pady=8)
+
+        freq_f = ttk.Frame(settings_f)
+        freq_f.pack(fill="x", pady=5)
+        ttk.Label(freq_f, text="Freq (Hz):").pack(side="left", padx=10)
+        self.freq_var = tk.DoubleVar(value=1.0)
+        ttk.Scale(
+            freq_f, from_=1.0, to=10.0, variable=self.freq_var, orient="horizontal"
+        ).pack(side="left", fill="x", expand=True, padx=10)
+        ttk.Label(freq_f, textvariable=self.freq_var, width=4).pack(side="left")
+        ttk.Label(
+            settings_f,
+            text="F7: Toggle Monitoring  |  F8: Reset  |  F9: Show/Hide HUD",
+            font=(self.font_name, int(10 * self.ui_scale)),
+            foreground="gray",
+        ).pack(pady=2)
+
+        dash_f = ttk.LabelFrame(content, text=" Combat Data Dashboard ")
+        dash_f.pack(fill="x", **pad)
+
+        metrics_f = ttk.Frame(dash_f)
+        metrics_f.pack(
+            fill="x", padx=int(40 * self.ui_scale), pady=int(15 * self.ui_scale)
+        )
+        metrics_f.columnconfigure(1, weight=1)
+
+        m_config = [
+            ("Remaining HP", self.hp_val_var, "red"),
+            ("Real-time DPS", self.rt_dps_val_var, None),
+            ("Real-time DPM", self.rt_dpm_val_var, None),
+            ("SEP", None, None),
+            ("Combat Time", self.combat_time_val_var, None),
+            ("Remaining Time", self.rem_time_val_var, "#673ab7"),
+            ("Total Damage", self.total_dmg_val_var, "#388e3c"),
+            ("Average DPM", self.avg_dpm_val_var, "#1976d2"),
+        ]
+
+        row_idx = 0
+        for name, var, color in m_config:
+            if name == "SEP":
+                ttk.Separator(metrics_f, orient="horizontal").grid(
+                    row=row_idx,
+                    column=0,
+                    columnspan=2,
+                    sticky="ew",
+                    pady=int(15 * self.ui_scale),
+                )
+                row_idx += 1
+                continue
+            lbl = ttk.Label(metrics_f, text=f"{name}:", font=self.font_large)
+            val = ttk.Label(metrics_f, textvariable=var, font=self.font_large)
+            if color:
+                val.config(foreground=color)
+                if name == "Remaining HP":
+                    lbl.config(foreground=color)
+            lbl.grid(row=row_idx, column=0, sticky="w", pady=int(8 * self.ui_scale))
+            val.grid(row=row_idx, column=1, sticky="e", pady=int(8 * self.ui_scale))
+            row_idx += 1
+
+        ttk.Button(
+            content, text="GENERATE PNG REPORT", command=self.generate_report
+        ).pack(padx=pad_val, pady=5, fill="x")
+
         self.refresh_windows()
+
+    def _on_canvas_configure(self, event):
+        # Update the width of the scrollable frame to match the canvas
+        self.main_canvas.itemconfig(self.canvas_window, width=event.width)
+
+    def _on_mousewheel(self, event):
+        self.main_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
 
     # UI: Reset region when window selection changes
     def on_window_change(self, event=None):
@@ -633,7 +714,7 @@ class BossDPSMonitorGUI:
             "00:00", 0, 0, 0, "READY" if self.is_monitoring else "IDLE", "00:00"
         )
 
-    # OCR: Parse raw text results into numeric HP values
+    # Engine: Parse raw text results into numeric HP values
     def parse_hp(self, text):
         matches = re.findall(r"(\d{1,3}(?:,\d{3})*)", text)
         valid = [
@@ -696,7 +777,7 @@ class BossDPSMonitorGUI:
                     hp = self.parse_hp(full_text)
                     if hp and not self.is_outlier(hp, now):
                         current_hp = hp
-                    
+
                     # Engine: Extract Boss Name (non-numeric text)
                     # We look for strings that don't contain many digits and aren't just punctuation/symbols
                     name_candidates = [
@@ -801,7 +882,7 @@ class BossDPSMonitorGUI:
                 self.perf_var.set(f"Actual Hz: {1.0/max(0.001, elapsed):.1f}")
                 time.sleep(max(0, interval - elapsed))
 
-    # Analytics: Reject visual noise or OCR errors
+    # Engine: Reject visual noise or OCR errors
     def is_outlier(self, hp, now):
         if self.last_detected_hp is None:
             return False
@@ -839,7 +920,9 @@ class BossDPSMonitorGUI:
             smoothed_dps = savgol_filter(df_raw["RT_DPS"], window_len, 2)
 
             # 2. Resample using Cubic Spline for a continuous, mathematically smooth curve
-            time_new = np.linspace(df_raw["TimeSec"].min(), df_raw["TimeSec"].max(), 500)
+            time_new = np.linspace(
+                df_raw["TimeSec"].min(), df_raw["TimeSec"].max(), 500
+            )
             spline = make_interp_spline(df_raw["TimeSec"], smoothed_dps, k=3)
             interp_dps = spline(time_new)
             interp_dps = np.clip(interp_dps, 0, None)  # Ensure no negative DPS
