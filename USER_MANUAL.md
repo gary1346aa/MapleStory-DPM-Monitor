@@ -19,7 +19,7 @@ To track boss health, the app needs to know where the HP bar is:
 1.  Open your MapleStory window.
 2.  In the Monitor's **Configuration** section, select your game window from the dropdown list.
 3.  Click **"Set Capture Region (Crop)"**.
-4.  A screenshot will appear. **Click and drag** a rectangle specifically over the **boss's numeric HP values** (the actual numbers on the HP bar).
+4.  A screenshot will appear. **Click and drag** a rectangle specifically over the **Boss's Name, numeric HP values, and the percentage** (e.g., "Lucid 12,345,678 (100.0%)").
 5.  Press **Escape** or release the mouse to save the region.
 
 ---
