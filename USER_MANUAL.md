@@ -5,10 +5,10 @@ Welcome to the **MapleStory Boss DPM Monitor**, a high-precision, GPU-accelerate
 ---
 
 ## 🛠️ 1. Essential First Step: Font Installation
-For the interface to display correctly with its premium typography, you **must** install the **Google Sans** font family.
+For the interface to display correctly with its premium typography, you **must** install the **Google Sans** font provided in the package.
 
-1.  Download the **Google Sans** font family (TTF files).
-2.  Select all font files, right-click, and choose **"Install for all users"**.
+1.  Locate the file **`GoogleSans-VariableFont_GRAD,opsz,wght.ttf`** inside the extracted folder.
+2.  Right-click the file and choose **"Install for all users"**.
 3.  Restart the application if it was already open.
     *   *Note: If the font is missing, the application will fall back to Segoe UI, but the layout is optimized for Google Sans.*
 
