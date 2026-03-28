@@ -1,4 +1,10 @@
 import cv2
+from PIL import Image, ImageTk
+
+# System: Monkeypatch ANTIALIAS for EasyOCR compatibility with newer Pillow versions
+if not hasattr(Image, "ANTIALIAS"):
+    Image.ANTIALIAS = Image.Resampling.LANCZOS
+
 import easyocr
 import mss
 import numpy as np
@@ -12,7 +18,6 @@ import threading
 import tkinter as tk
 from tkinter import ttk, messagebox, scrolledtext
 import tkinter.font as tkfont
-from PIL import Image, ImageTk
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
@@ -21,7 +26,7 @@ import os
 import ctypes
 import keyboard
 
-# 1. Enable High DPI awareness
+# GUI: Enable High DPI awareness for Windows
 try:
     ctypes.windll.shcore.SetProcessDpiAwareness(1)
 except Exception:
@@ -30,7 +35,23 @@ except Exception:
     except Exception:
         pass
 
-# 2. Monkeypatch torch.load
+# Build: Fix for bundled PyTorch GPU support in frozen executables
+if getattr(sys, "frozen", False):
+    bundle_dir = sys._MEIPASS
+    paths_to_add = [
+        os.path.join(bundle_dir, "_internal", "torch", "lib"),
+        os.path.join(bundle_dir, "_internal"),
+        os.path.join(bundle_dir, "_internal", "cv2"),
+    ]
+    for p in paths_to_add:
+        if os.path.exists(p):
+            try:
+                os.add_dll_directory(p)
+            except:
+                pass
+            os.environ["PATH"] = p + os.pathsep + os.environ["PATH"]
+
+# Dependencies: Patch torch.load to avoid weights_only issues
 _original_torch_load = torch.load
 
 
@@ -43,6 +64,7 @@ def _patched_torch_load(*args, **kwargs):
 torch.load = _patched_torch_load
 
 
+# UI: Helper to determine HUD color based on DPM tiers
 def get_dpm_color(val):
     if val < 2000000:
         return "#FFFFEE"
@@ -63,6 +85,7 @@ def get_dpm_color(val):
     return "#FF66CC"
 
 
+# Region Selector: Fullscreen overlay for selecting the boss HP bar
 class RegionSelector(tk.Toplevel):
     def __init__(self, parent, screenshot):
         super().__init__(parent)
@@ -99,6 +122,7 @@ class RegionSelector(tk.Toplevel):
         self.destroy()
 
 
+# HUD Overlay: Transparent, OBS-friendly window for in-game monitoring
 class HUDOverlay(tk.Toplevel):
     def __init__(self, parent):
         super().__init__(parent)
@@ -118,7 +142,7 @@ class HUDOverlay(tk.Toplevel):
         except:
             self.font_name = "Segoe UI"
 
-        # Sliders
+        # Controls: Hover-activated transparency and scale sliders
         self.trans_slider = tk.Scale(
             self,
             from_=100,
@@ -151,6 +175,7 @@ class HUDOverlay(tk.Toplevel):
         self.trans_slider.set(85)
         self.scale_slider.set(1.0)
 
+        # Layout: Main container with padding for drag handle
         self.container = tk.Frame(self, bg="black")
         self.container.pack(padx=5, pady=(12, 5))
 
@@ -163,6 +188,7 @@ class HUDOverlay(tk.Toplevel):
         self.update_idletasks()
         self.withdraw()
 
+    # System: Win32 API calls to make borderless window capturable by OBS
     def apply_borderless_obs_style(self):
         if sys.platform == "win32":
             self.update_idletasks()
@@ -179,6 +205,7 @@ class HUDOverlay(tk.Toplevel):
             )
             ctypes.windll.user32.SetWindowPos(hwnd, 0, 0, 0, 0, 0, 0x0027)
 
+    # UI: Recursive binding for jitter-free dragging
     def bind_drag(self, widget):
         widget.bind("<ButtonPress-1>", self.start_move)
         widget.bind("<ButtonRelease-1>", self.stop_move)
@@ -186,6 +213,7 @@ class HUDOverlay(tk.Toplevel):
         for child in widget.winfo_children():
             self.bind_drag(child)
 
+    # UI: Initialization of labels and value displays
     def setup_widgets(self):
         self.labels = {}
         self.values = {}
@@ -208,6 +236,7 @@ class HUDOverlay(tk.Toplevel):
             if k == "stat":
                 self.values[k].config(fg="#00FF00")
 
+    # UI: Symmetrical 3-column grid layout with scaling
     def update_layout(self):
         s = self.scale_factor
         f_lbl = (self.font_name, int(12 * s), "bold")
@@ -263,6 +292,7 @@ class HUDOverlay(tk.Toplevel):
         ny = event.y_root - self._drag_data["y"]
         self.geometry(f"+{nx}+{ny}")
 
+    # UI: Real-time metric push to HUD labels
     def update_metrics(self, combat_time, dps, dpm, total_dmg, status, rem_time):
         self.values["time"].config(text=combat_time)
         self.values["dps"].config(text=f"{dps:,.0f}")
@@ -281,11 +311,12 @@ class HUDOverlay(tk.Toplevel):
             self.values["stat"].config(fg="#00FF00")
 
 
+# Main Dashboard: Management console for window selection and analytics
 class BossDPSMonitorGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("MapleStory Boss DPS Monitor")
-        self.root.geometry("650x1500")  # Extreme height as requested
+        self.root.geometry("650x1500")
         self.font_name = "Google Sans"
         try:
             test_font = tkfont.Font(family=self.font_name)
@@ -298,7 +329,7 @@ class BossDPSMonitorGUI:
         self.font_medium = (self.font_name, 12)
         self.font_small = (self.font_name, 10)
 
-        # Configure global style
+        # UI Styling: Consistent modern look
         style = ttk.Style()
         style.configure(".", font=(self.font_name, 10))
         style.configure("TLabel", font=(self.font_name, 10))
@@ -306,6 +337,7 @@ class BossDPSMonitorGUI:
         style.configure("TButton", font=(self.font_name, 10))
         style.configure("TCombobox", font=(self.font_name, 10))
 
+        # State: Core combat variables
         self.hp_history = []
         self.metrics_history = []
         self.total_damage = 0
@@ -321,7 +353,7 @@ class BossDPSMonitorGUI:
         self.use_gpu = torch.cuda.is_available()
         self.gpu_name = torch.cuda.get_device_name(0) if self.use_gpu else "CPU Mode"
 
-        # Initialize variables before setup_ui
+        # Vars: Data binding for UI updates
         self.hp_val_var = tk.StringVar(value="-")
         self.rt_dps_val_var = tk.StringVar(value="-")
         self.rt_dpm_val_var = tk.StringVar(value="-")
@@ -340,6 +372,7 @@ class BossDPSMonitorGUI:
         self.hud = HUDOverlay(self.root)
         self.setup_hotkeys()
 
+    # UI: Building the main control panel
     def setup_ui(self):
         main_container = ttk.Frame(self.root)
         main_container.pack(fill="both", expand=True)
@@ -353,6 +386,8 @@ class BossDPSMonitorGUI:
 
         self.window_list = ttk.Combobox(settings_f, width=50)
         self.window_list.pack(padx=10, pady=5)
+        # Event: Clear region when a new window is selected
+        self.window_list.bind("<<ComboboxSelected>>", self.on_window_change)
 
         btn_f = ttk.Frame(settings_f)
         btn_f.pack(fill="x", padx=10, pady=5)
@@ -363,13 +398,24 @@ class BossDPSMonitorGUI:
             btn_f, text="Set Capture Region (Crop)", command=self.set_region
         ).pack(side="left", fill="x", expand=True, padx=5)
 
-        self.region_var = tk.StringVar(value="Region: Default")
-        ttk.Label(settings_f, textvariable=self.region_var).pack()
+        # Region Status: Styled pill-style tag
+        self.region_display = tk.Label(
+            settings_f,
+            text="REGION NOT SET",
+            font=(self.font_name, 9, "bold"),
+            fg="#C62828",
+            bg="#FFEBEE",
+            padx=12,
+            pady=4,
+            relief="flat",
+            borderwidth=0,
+        )
+        self.region_display.pack(pady=8)
 
         freq_f = ttk.Frame(settings_f)
         freq_f.pack(fill="x", pady=5)
         ttk.Label(freq_f, text="Freq (Hz):").pack(side="left", padx=10)
-        self.freq_var = tk.DoubleVar(value=5.0)
+        self.freq_var = tk.DoubleVar(value=1.0)
         ttk.Scale(
             freq_f, from_=1.0, to=10.0, variable=self.freq_var, orient="horizontal"
         ).pack(side="left", fill="x", expand=True, padx=10)
@@ -421,7 +467,7 @@ class BossDPSMonitorGUI:
             content, text="GENERATE PNG REPORT", command=self.generate_report
         ).pack(padx=30, pady=5, fill="x")
 
-        # TWO-LINE SYSTEM STATUS BAR (Tightened with grid)
+        # UI: System status bar with pixel-perfect spacing
         stat_container = ttk.Frame(self.root)
         stat_container.pack(side="bottom", fill="x", padx=10, pady=(0, 2))
         stat_container.columnconfigure(2, weight=1)
@@ -429,7 +475,6 @@ class BossDPSMonitorGUI:
         st_font = (self.font_name, 9)
         st_bold = (self.font_name, 9, "bold")
 
-        # Row 0: Engine, HW, Actual Hz
         ttk.Label(stat_container, textvariable=self.status_var, font=st_font).grid(
             row=0, column=0, sticky="w"
         )
@@ -440,7 +485,6 @@ class BossDPSMonitorGUI:
             row=0, column=2, sticky="e"
         )
 
-        # Row 1: Monitoring and Combat (No vertical pady to keep them tight)
         ttk.Label(
             stat_container,
             textvariable=self.monitor_status_var,
@@ -456,13 +500,22 @@ class BossDPSMonitorGUI:
 
         self.refresh_windows()
 
+    # UI: Reset region when window selection changes
+    def on_window_change(self, event=None):
+        self.capture_region = None
+        self.region_display.config(text="REGION NOT SET", fg="#C62828", bg="#FFEBEE")
+
+    # System: Initialize EasyOCR engine with GPU/CPU support
     def init_ocr(self):
         try:
             self.reader = easyocr.Reader(["en"], gpu=self.use_gpu)
             self.status_var.set("Engine: Ready")
-        except Exception:
-            pass
+        except Exception as e:
+            self.status_var.set(f"OCR Error: {str(e)[:20]}")
+            with open("debug_ocr_error.txt", "a") as f:
+                f.write(f"[{datetime.now()}] Init Error: {str(e)}\n")
 
+    # System: Global hotkey registration
     def setup_hotkeys(self):
         try:
             keyboard.add_hotkey("f7", self.hotkey_toggle)
@@ -492,6 +545,7 @@ class BossDPSMonitorGUI:
         if titles:
             self.window_list.current(0)
 
+    # UI: Interactive crop tool for defining HP bar location
     def set_region(self):
         selection = self.window_list.get()
         windows = gw.getWindowsWithTitle(selection)
@@ -513,8 +567,12 @@ class BossDPSMonitorGUI:
             self.root.wait_window(selector)
             if selector.selection:
                 self.capture_region = selector.selection
-                self.region_var.set(f"Region Set")
+                # Update status label to success pill state
+                self.region_display.config(
+                    text="REGION CUSTOM SET", fg="#2E7D32", bg="#E8F5E9"
+                )
 
+    # State: Toggle the background monitoring thread
     def toggle_monitoring(self):
         if self.is_monitoring:
             self.is_monitoring = False
@@ -545,6 +603,7 @@ class BossDPSMonitorGUI:
             self.hud.update_metrics("00:00", 0, 0, self.total_damage, "READY", "--:--")
             threading.Thread(target=self.monitor_loop, daemon=True).start()
 
+    # State: Clear all combat data
     def reset_metrics(self):
         self.hp_history = []
         self.metrics_history = []
@@ -569,6 +628,7 @@ class BossDPSMonitorGUI:
             "00:00", 0, 0, 0, "READY" if self.is_monitoring else "IDLE", "00:00"
         )
 
+    # OCR: Parse raw text results into numeric HP values
     def parse_hp(self, text):
         matches = re.findall(r"(\d{1,3}(?:,\d{3})*)", text)
         valid = [
@@ -578,6 +638,7 @@ class BossDPSMonitorGUI:
         ]
         return max(valid) if valid else None
 
+    # UI: Helper to format seconds into HH:MM:SS
     def format_combat_time(self, seconds, short=False):
         td = timedelta(seconds=int(max(0, seconds)))
         parts = str(td).split(":")
@@ -587,6 +648,7 @@ class BossDPSMonitorGUI:
             else f"{int(parts[0]):02d}:{int(parts[1]):02d}:{int(parts[2]):02d}"
         )
 
+    # Engine: Main monitoring loop running in a separate thread
     def monitor_loop(self):
         with mss.mss() as sct:
             while self.is_monitoring:
@@ -614,7 +676,14 @@ class BossDPSMonitorGUI:
                 )
                 img = np.array(sct.grab(monitor))
                 img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
-                results = self.reader.readtext(img, detail=0)
+
+                results = []
+                try:
+                    results = self.reader.readtext(img, detail=0)
+                except Exception as e:
+                    with open("debug_ocr_error.txt", "a") as f:
+                        f.write(f"[{datetime.now()}] Runtime Error: {str(e)}\n")
+
                 current_hp = None
                 now = time.time()
                 if results:
@@ -713,14 +782,16 @@ class BossDPSMonitorGUI:
                 self.perf_var.set(f"Actual Hz: {1.0/max(0.001, elapsed):.1f}")
                 time.sleep(max(0, interval - elapsed))
 
+    # Analytics: Reject visual noise or OCR errors
     def is_outlier(self, hp, now):
         if self.last_detected_hp is None:
             return False
-        # Rule 1: Reject HP increase over 50,000 or decrease over 500000
+        # Rule 1: Reject HP increase over 50,000 or decrease over 500,000
         if hp > self.last_detected_hp + 50000 or hp < self.last_detected_hp - 500000:
             return True
         return False
 
+    # Analytics: Generate and save PNG performance graph
     def generate_report(self):
         if not self.hp_history:
             messagebox.showwarning("Warning", "No combat data to report.")
