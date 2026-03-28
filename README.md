@@ -1,17 +1,17 @@
 # MapleStory Boss DPM Monitor
 
-A high-precision, GPU-accelerated combat analytics tool for MapleStory.
+A GPU-accelerated combat analytics tool for MapleStory.
 
-## 🚀 Features
+## Features
 
-- **GPU-Accelerated OCR**: Utilizes `EasyOCR` with CUDA support (tested on RTX 3080) for near-instant HP detection.
-- **Real-Time HUD**: Transparent, borderless overlay visible to OBS but non-intrusive for the player.
-- **Dynamic Analytics**: Tracks DPS, DPM, Total Damage, and estimated time remaining.
-- **Smart Outlier Detection**: Intelligent filtering of OCR jitter and boss disappearance logic.
-- **Visual Reports**: Generates professional PNG performance analytics with DPS curves.
-- **Premium UI**: Modern interface using **Google Sans** typography and High DPI support.
+- **GPU-Accelerated OCR**: Uses `EasyOCR` with CUDA support for HP detection.
+- **Real-Time HUD**: Transparent, borderless overlay.
+- **Analytics**: Tracks DPS, DPM, Total Damage, and estimated time remaining.
+- **Outlier Detection**: Filters OCR jitter and boss disappearance logic.
+- **Reports**: Generates PNG charts with DPS curves.
+- **UI**: Interface with Google Sans typography and High DPI support.
 
-## ⌨️ Hotkeys
+## Hotkeys
 
 | Key | Action |
 | :--- | :--- |
@@ -19,13 +19,13 @@ A high-precision, GPU-accelerated combat analytics tool for MapleStory.
 | **F8** | Reset Session Metrics |
 | **F9** | Show/Hide HUD Overlay |
 
-## 🛠️ Requirements
+## Requirements
 
 - Python 3.10+
 - NVIDIA GPU with CUDA support (recommended)
 - Dependencies: `easyocr`, `torch`, `opencv-python`, `mss`, `keyboard`, `pandas`, `matplotlib`, `PIL`
 
-## 📦 Installation
+## Installation
 
 1. Clone the repository:
    ```bash
@@ -40,16 +40,16 @@ A high-precision, GPU-accelerated combat analytics tool for MapleStory.
    python maplestory_dps_gui.py
    ```
 
-## 🔨 Building the Executable (.exe)
+## Building the Executable (.exe)
 
-To generate a standalone executable with **GPU support**:
+To generate a standalone executable with GPU support:
 
 1. Ensure you have an NVIDIA GPU and Python 3.10+ installed.
 2. Run the provided build script:
    ```powershell
    .\build.bat
    ```
-   *Note: This will create a virtual environment, install ~2GB of CUDA-enabled PyTorch, and bundle the app into the `dist/` folder.*
+   *Note: This creates a virtual environment, installs CUDA-enabled PyTorch, and bundles the app into the `dist/` folder.*
 
 ---
-*Developed for MapleStory players seeking professional-grade combat analytics.*
+*Developed for the MapleStory community.*
