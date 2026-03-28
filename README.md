@@ -39,5 +39,17 @@ A high-precision, GPU-accelerated combat analytics tool for MapleStory.
    ```bash
    python maplestory_dps_gui.py
    ```
+
+## 🔨 Building the Executable (.exe)
+
+To generate a standalone executable with **GPU support**:
+
+1. Ensure you have an NVIDIA GPU and Python 3.10+ installed.
+2. Run the provided build script:
+   ```powershell
+   .\build.bat
+   ```
+   *Note: This will create a virtual environment, install ~2GB of CUDA-enabled PyTorch, and bundle the app into the `dist/` folder.*
+
 ---
 *Developed for MapleStory players seeking professional-grade combat analytics.*
