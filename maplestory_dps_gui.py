@@ -160,6 +160,7 @@ class HUDOverlay(tk.Toplevel):
         self.bind_drag(self.container)
         self.bind("<Enter>", self.show_controls)
         self.bind("<Leave>", self.hide_controls)
+        self.update_idletasks()
         self.withdraw()
 
     def apply_borderless_obs_style(self):
@@ -284,7 +285,7 @@ class BossDPSMonitorGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("MapleStory Boss DPS Monitor")
-        self.root.geometry("650x1500") # Extreme height as requested
+        self.root.geometry("650x1500")  # Extreme height as requested
         self.font_name = "Google Sans"
         try:
             test_font = tkfont.Font(family=self.font_name)
@@ -292,11 +293,11 @@ class BossDPSMonitorGUI:
                 self.font_name = "Segoe UI"
         except:
             self.font_name = "Segoe UI"
-        
+
         self.font_large = (self.font_name, 16, "bold")
         self.font_medium = (self.font_name, 12)
         self.font_small = (self.font_name, 10)
-        
+
         # Configure global style
         style = ttk.Style()
         style.configure(".", font=(self.font_name, 10))
@@ -319,7 +320,7 @@ class BossDPSMonitorGUI:
         self.capture_region = None
         self.use_gpu = torch.cuda.is_available()
         self.gpu_name = torch.cuda.get_device_name(0) if self.use_gpu else "CPU Mode"
-        
+
         # Initialize variables before setup_ui
         self.hp_val_var = tk.StringVar(value="-")
         self.rt_dps_val_var = tk.StringVar(value="-")
@@ -333,6 +334,8 @@ class BossDPSMonitorGUI:
         self.combat_status_var = tk.StringVar(value="Combat: IDLE")
         self.perf_var = tk.StringVar(value="Actual Hz: -")
 
+        self.current_avg_dps = 0.0
+
         self.setup_ui()
         self.reader = None
         threading.Thread(target=self.init_ocr, daemon=True).start()
@@ -342,32 +345,43 @@ class BossDPSMonitorGUI:
     def setup_ui(self):
         main_container = ttk.Frame(self.root)
         main_container.pack(fill="both", expand=True)
-        
+
         content = ttk.Frame(main_container)
         content.pack(fill="both", expand=True)
-        
+
         pad = {"padx": 30, "pady": 12}
         settings_f = ttk.LabelFrame(content, text=" Configuration ")
         settings_f.pack(fill="x", **pad)
-        
+
         self.window_list = ttk.Combobox(settings_f, width=50)
         self.window_list.pack(padx=10, pady=5)
-        
+
         btn_f = ttk.Frame(settings_f)
         btn_f.pack(fill="x", padx=10, pady=5)
-        ttk.Button(btn_f, text="Refresh Window List", command=self.refresh_windows).pack(side="left", fill="x", expand=True, padx=5)
-        ttk.Button(btn_f, text="Set Capture Region (Crop)", command=self.set_region).pack(side="left", fill="x", expand=True, padx=5)
-        
+        ttk.Button(
+            btn_f, text="Refresh Window List", command=self.refresh_windows
+        ).pack(side="left", fill="x", expand=True, padx=5)
+        ttk.Button(
+            btn_f, text="Set Capture Region (Crop)", command=self.set_region
+        ).pack(side="left", fill="x", expand=True, padx=5)
+
         self.region_var = tk.StringVar(value="Region: Default")
         ttk.Label(settings_f, textvariable=self.region_var).pack()
-        
+
         freq_f = ttk.Frame(settings_f)
         freq_f.pack(fill="x", pady=5)
         ttk.Label(freq_f, text="Freq (Hz):").pack(side="left", padx=10)
         self.freq_var = tk.DoubleVar(value=5.0)
-        ttk.Scale(freq_f, from_=1.0, to=10.0, variable=self.freq_var, orient="horizontal").pack(side="left", fill="x", expand=True, padx=10)
+        ttk.Scale(
+            freq_f, from_=1.0, to=10.0, variable=self.freq_var, orient="horizontal"
+        ).pack(side="left", fill="x", expand=True, padx=10)
         ttk.Label(freq_f, textvariable=self.freq_var, width=4).pack(side="left")
-        ttk.Label(settings_f, text="F7: Toggle Monitoring  |  F8: Reset  |  F9: Show/Hide HUD", font=(self.font_name, 10), foreground="gray").pack(pady=2)
+        ttk.Label(
+            settings_f,
+            text="F7: Toggle Monitoring  |  F8: Reset  |  F9: Show/Hide HUD",
+            font=(self.font_name, 10),
+            foreground="gray",
+        ).pack(pady=2)
 
         dash_f = ttk.LabelFrame(content, text=" Combat Data Dashboard ")
         dash_f.pack(fill="x", **pad)
@@ -390,19 +404,24 @@ class BossDPSMonitorGUI:
         row_idx = 0
         for name, var, color in m_config:
             if name == "SEP":
-                ttk.Separator(metrics_f, orient="horizontal").grid(row=row_idx, column=0, columnspan=2, sticky="ew", pady=15)
+                ttk.Separator(metrics_f, orient="horizontal").grid(
+                    row=row_idx, column=0, columnspan=2, sticky="ew", pady=15
+                )
                 row_idx += 1
                 continue
             lbl = ttk.Label(metrics_f, text=f"{name}:", font=self.font_large)
             val = ttk.Label(metrics_f, textvariable=var, font=self.font_large)
             if color:
                 val.config(foreground=color)
-                if name == "Remaining HP": lbl.config(foreground=color)
+                if name == "Remaining HP":
+                    lbl.config(foreground=color)
             lbl.grid(row=row_idx, column=0, sticky="w", pady=8)
             val.grid(row=row_idx, column=1, sticky="e", pady=8)
             row_idx += 1
 
-        ttk.Button(content, text="GENERATE PNG REPORT", command=self.generate_report).pack(padx=30, pady=5, fill="x")
+        ttk.Button(
+            content, text="GENERATE PNG REPORT", command=self.generate_report
+        ).pack(padx=30, pady=5, fill="x")
 
         # TWO-LINE SYSTEM STATUS BAR (Tightened with grid)
         stat_container = ttk.Frame(self.root)
@@ -411,15 +430,31 @@ class BossDPSMonitorGUI:
 
         st_font = (self.font_name, 9)
         st_bold = (self.font_name, 9, "bold")
-        
+
         # Row 0: Engine, HW, Actual Hz
-        ttk.Label(stat_container, textvariable=self.status_var, font=st_font).grid(row=0, column=0, sticky="w")
-        ttk.Label(stat_container, text=f"| HW: {self.gpu_name}", font=st_font).grid(row=0, column=1, sticky="w", padx=10)
-        ttk.Label(stat_container, textvariable=self.perf_var, font=st_font).grid(row=0, column=2, sticky="e")
-        
+        ttk.Label(stat_container, textvariable=self.status_var, font=st_font).grid(
+            row=0, column=0, sticky="w"
+        )
+        ttk.Label(stat_container, text=f"| HW: {self.gpu_name}", font=st_font).grid(
+            row=0, column=1, sticky="w", padx=10
+        )
+        ttk.Label(stat_container, textvariable=self.perf_var, font=st_font).grid(
+            row=0, column=2, sticky="e"
+        )
+
         # Row 1: Monitoring and Combat (No vertical pady to keep them tight)
-        ttk.Label(stat_container, textvariable=self.monitor_status_var, font=st_bold, foreground="#1976d2").grid(row=1, column=0, columnspan=2, sticky="w", pady=0)
-        ttk.Label(stat_container, textvariable=self.combat_status_var, font=st_bold, foreground="#FF4444").grid(row=1, column=2, sticky="e", pady=0)
+        ttk.Label(
+            stat_container,
+            textvariable=self.monitor_status_var,
+            font=st_bold,
+            foreground="#1976d2",
+        ).grid(row=1, column=0, columnspan=2, sticky="w", pady=0)
+        ttk.Label(
+            stat_container,
+            textvariable=self.combat_status_var,
+            font=st_bold,
+            foreground="#FF4444",
+        ).grid(row=1, column=2, sticky="e", pady=0)
 
         self.refresh_windows()
 
@@ -438,28 +473,44 @@ class BossDPSMonitorGUI:
         except Exception:
             pass
 
-    def hotkey_toggle(self): self.root.after(0, self.toggle_monitoring)
-    def hotkey_reset(self): self.root.after(0, self.reset_metrics)
-    def hotkey_hud(self): self.root.after(0, self.toggle_hud)
+    def hotkey_toggle(self):
+        self.root.after(0, self.toggle_monitoring)
+
+    def hotkey_reset(self):
+        self.root.after(0, self.reset_metrics)
+
+    def hotkey_hud(self):
+        self.root.after(0, self.toggle_hud)
 
     def toggle_hud(self):
-        if self.hud.winfo_viewable(): self.hud.withdraw()
-        else: self.hud.deiconify()
+        if self.hud.winfo_viewable():
+            self.hud.withdraw()
+        else:
+            self.hud.deiconify()
 
     def refresh_windows(self):
         titles = [w for w in gw.getAllTitles() if w.strip()]
         self.window_list["values"] = titles
-        if titles: self.window_list.current(0)
+        if titles:
+            self.window_list.current(0)
 
     def set_region(self):
         selection = self.window_list.get()
         windows = gw.getWindowsWithTitle(selection)
-        if not windows: return
+        if not windows:
+            return
         win = windows[0]
         with mss.mss() as sct:
-            monitor = {"top": win.top, "left": win.left, "width": win.width, "height": win.height}
+            monitor = {
+                "top": win.top,
+                "left": win.left,
+                "width": win.width,
+                "height": win.height,
+            }
             sct_img = sct.grab(monitor)
-            screenshot = Image.frombytes("RGB", sct_img.size, sct_img.bgra, "raw", "BGRX")
+            screenshot = Image.frombytes(
+                "RGB", sct_img.size, sct_img.bgra, "raw", "BGRX"
+            )
             selector = RegionSelector(self.root, screenshot)
             self.root.wait_window(selector)
             if selector.selection:
@@ -474,12 +525,21 @@ class BossDPSMonitorGUI:
             self.is_in_combat = False
             self.monitor_status_var.set("Monitoring: OFF")
             self.combat_status_var.set("Combat: IDLE")
-            self.hud.update_metrics(self.format_combat_time(self.accumulated_combat_time, short=True), 0, 0, self.total_damage, "IDLE", "--:--")
+            self.hud.update_metrics(
+                self.format_combat_time(self.accumulated_combat_time, short=True),
+                0,
+                0,
+                self.total_damage,
+                "IDLE",
+                "--:--",
+            )
         else:
-            if not self.reader: return
+            if not self.reader:
+                return
             selection = self.window_list.get()
             windows = gw.getWindowsWithTitle(selection)
-            if not windows: return
+            if not windows:
+                return
             self.target_window = windows[0]
             self.is_monitoring = True
             self.monitor_status_var.set("Monitoring: ON")
@@ -488,89 +548,264 @@ class BossDPSMonitorGUI:
             threading.Thread(target=self.monitor_loop, daemon=True).start()
 
     def reset_metrics(self):
-        self.hp_history = []; self.metrics_history = []; self.total_damage = 0; self.initial_hp = None; self.accumulated_combat_time = 0.0
-        self.fight_session_start = None; self.is_in_combat = False; self.last_detected_hp = None; self.last_hp_seen_time = 0
-        self.hp_val_var.set("-"); self.rt_dps_val_var.set("-"); self.rt_dpm_val_var.set("-"); self.combat_time_val_var.set("00:00:00")
-        self.total_dmg_val_var.set("-"); self.avg_dpm_val_var.set("-"); self.rem_time_val_var.set("--:--:--")
-        self.combat_status_var.set("Combat: WAITING" if self.is_monitoring else "Combat: IDLE")
-        self.hud.update_metrics("00:00", 0, 0, 0, "READY" if self.is_monitoring else "IDLE", "00:00")
+        self.hp_history = []
+        self.metrics_history = []
+        self.total_damage = 0
+        self.initial_hp = None
+        self.accumulated_combat_time = 0.0
+        self.fight_session_start = None
+        self.is_in_combat = False
+        self.last_detected_hp = None
+        self.last_hp_seen_time = 0
+        self.hp_val_var.set("-")
+        self.rt_dps_val_var.set("-")
+        self.rt_dpm_val_var.set("-")
+        self.combat_time_val_var.set("00:00:00")
+        self.total_dmg_val_var.set("-")
+        self.avg_dpm_val_var.set("-")
+        self.rem_time_val_var.set("--:--:--")
+        self.combat_status_var.set(
+            "Combat: WAITING" if self.is_monitoring else "Combat: IDLE"
+        )
+        self.hud.update_metrics(
+            "00:00", 0, 0, 0, "READY" if self.is_monitoring else "IDLE", "00:00"
+        )
 
     def parse_hp(self, text):
         matches = re.findall(r"(\d{1,3}(?:,\d{3})*)", text)
-        valid = [int(m.replace(",", "")) for m in matches if 100 < int(m.replace(",", "")) < 10**15]
+        valid = [
+            int(m.replace(",", ""))
+            for m in matches
+            if 100 < int(m.replace(",", "")) < 10**15
+        ]
         return max(valid) if valid else None
 
     def format_combat_time(self, seconds, short=False):
         td = timedelta(seconds=int(max(0, seconds)))
         parts = str(td).split(":")
-        return (f"{int(parts[1]):02d}:{int(parts[2]):02d}" if short else f"{int(parts[0]):02d}:{int(parts[1]):02d}:{int(parts[2]):02d}")
+        return (
+            f"{int(parts[1]):02d}:{int(parts[2]):02d}"
+            if short
+            else f"{int(parts[0]):02d}:{int(parts[1]):02d}:{int(parts[2]):02d}"
+        )
 
     def monitor_loop(self):
         with mss.mss() as sct:
             while self.is_monitoring:
-                loop_start = time.time(); target_hz = self.freq_var.get(); interval = 1.0 / target_hz; win = self.target_window
-                if win.isMinimized or not win.visible: time.sleep(interval); continue
-                monitor = ({"top": win.top + self.capture_region[1], "left": win.left + self.capture_region[0], "width": self.capture_region[2], "height": self.capture_region[3]} if self.capture_region else {"top": win.top, "left": win.left, "width": win.width, "height": int(win.height * 0.35)})
-                img = np.array(sct.grab(monitor)); img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
-                results = self.reader.readtext(img, detail=0); current_hp = None
-                if results:
-                    full_text = " ".join(results); hp = self.parse_hp(full_text)
-                    if hp and not self.is_outlier(hp): current_hp = hp
+                loop_start = time.time()
+                target_hz = self.freq_var.get()
+                interval = 1.0 / target_hz
+                win = self.target_window
+                if win.isMinimized or not win.visible:
+                    time.sleep(interval)
+                    continue
+                monitor = (
+                    {
+                        "top": win.top + self.capture_region[1],
+                        "left": win.left + self.capture_region[0],
+                        "width": self.capture_region[2],
+                        "height": self.capture_region[3],
+                    }
+                    if self.capture_region
+                    else {
+                        "top": win.top,
+                        "left": win.left,
+                        "width": win.width,
+                        "height": int(win.height * 0.35),
+                    }
+                )
+                img = np.array(sct.grab(monitor))
+                img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
+                results = self.reader.readtext(img, detail=0)
+                current_hp = None
                 now = time.time()
+                if results:
+                    full_text = " ".join(results)
+                    hp = self.parse_hp(full_text)
+                    if hp and not self.is_outlier(hp, now):
+                        current_hp = hp
                 if current_hp:
                     self.last_hp_seen_time = now
-                    if self.last_detected_hp is None: self.last_detected_hp = current_hp
+                    if self.last_detected_hp is None:
+                        self.last_detected_hp = current_hp
                     if not self.is_in_combat and current_hp < self.last_detected_hp:
-                        self.is_in_combat = True; self.fight_session_start = now; self.last_damage_time = now
-                        if self.initial_hp is None: self.initial_hp = self.last_detected_hp
+                        self.is_in_combat = True
+                        self.fight_session_start = now
+                        self.last_damage_time = now
+                        if self.initial_hp is None:
+                            self.initial_hp = self.last_detected_hp
                         self.combat_status_var.set("Combat: ACTIVE")
                     if self.is_in_combat:
-                        if current_hp < self.last_detected_hp: self.last_damage_time = now
+                        if current_hp < self.last_detected_hp:
+                            self.last_damage_time = now
                         if now - self.last_damage_time >= 3.0:
-                            self.is_in_combat = False; self.accumulated_combat_time += time.time() - self.fight_session_start
-                            self.fight_session_start = None; self.combat_status_var.set("Combat: PAUSED")
-                    self.last_detected_hp = current_hp; self.hp_history.append((now, current_hp))
-                    if self.initial_hp is not None: self.total_damage = max(0, self.initial_hp - current_hp)
-                    total_time = self.accumulated_combat_time + (now - self.fight_session_start if (self.is_in_combat and self.fight_session_start) else 0.0)
+                            self.is_in_combat = False
+                            self.accumulated_combat_time += (
+                                time.time() - self.fight_session_start
+                            )
+                            self.fight_session_start = None
+                            self.combat_status_var.set("Combat: PAUSED")
+                    self.last_detected_hp = current_hp
+                    self.hp_history.append((now, current_hp))
+                    if self.initial_hp is not None:
+                        self.total_damage = max(0, self.initial_hp - current_hp)
+                    total_time = self.accumulated_combat_time + (
+                        now - self.fight_session_start
+                        if (self.is_in_combat and self.fight_session_start)
+                        else 0.0
+                    )
                     self.hp_val_var.set(f"{current_hp:,}")
                     if total_time > 0:
-                        past_idx = max(0, len(self.hp_history) - int(5 * target_hz) - 1); dt_recent = now - self.hp_history[past_idx][0]
-                        rt_dps = max(0, (self.hp_history[past_idx][1] - current_hp) / dt_recent) if dt_recent > 0 else 0
-                        avg_dpm = (self.total_damage / total_time) * 60; c_time_str = self.format_combat_time(total_time); rem_sec = (current_hp / (avg_dpm / 60)) if avg_dpm > 0 else 0; rem_t_str = self.format_combat_time(rem_sec, short=True)
-                        self.rt_dps_val_var.set(f"{rt_dps:,.0f}"); self.rt_dpm_val_var.set(f"{rt_dps * 60:,.0f}"); self.combat_time_val_var.set(f"{c_time_str}"); self.total_dmg_val_var.set(f"{self.total_damage:,}"); self.avg_dpm_val_var.set(f"{avg_dpm:,.0f}"); self.rem_time_val_var.set(f"{rem_t_str}")
-                        self.hud.update_metrics(self.format_combat_time(total_time, short=True), rt_dps, avg_dpm, self.total_damage, "IN COMBAT" if self.is_in_combat else "READY", rem_t_str)
-                    else: self.hud.update_metrics("00:00", 0, 0, self.total_damage, "READY", "--:--")
+                        past_idx = max(0, len(self.hp_history) - int(5 * target_hz) - 1)
+                        dt_recent = now - self.hp_history[past_idx][0]
+                        rt_dps = (
+                            max(
+                                0,
+                                (self.hp_history[past_idx][1] - current_hp) / dt_recent,
+                            )
+                            if dt_recent > 0
+                            else 0
+                        )
+                        avg_dpm = (self.total_damage / total_time) * 60
+                        c_time_str = self.format_combat_time(total_time)
+                        rem_sec = (current_hp / (avg_dpm / 60)) if avg_dpm > 0 else 0
+                        rem_t_str = self.format_combat_time(rem_sec, short=True)
+                        self.rt_dps_val_var.set(f"{rt_dps:,.0f}")
+                        self.rt_dpm_val_var.set(f"{rt_dps * 60:,.0f}")
+                        self.combat_time_val_var.set(f"{c_time_str}")
+                        self.total_dmg_val_var.set(f"{self.total_damage:,}")
+                        self.avg_dpm_val_var.set(f"{avg_dpm:,.0f}")
+                        self.rem_time_val_var.set(f"{rem_t_str}")
+                        self.hud.update_metrics(
+                            self.format_combat_time(total_time, short=True),
+                            rt_dps,
+                            avg_dpm,
+                            self.total_damage,
+                            "IN COMBAT" if self.is_in_combat else "READY",
+                            rem_t_str,
+                        )
+                    else:
+                        self.hud.update_metrics(
+                            "00:00", 0, 0, self.total_damage, "READY", "--:--"
+                        )
                 else:
                     if self.is_in_combat and now - self.last_hp_seen_time >= 3.0:
-                        self.is_in_combat = False; f_ts = self.last_hp_seen_time + interval
-                        self.accumulated_combat_time += f_ts - self.fight_session_start; self.fight_session_start = None
-                        if self.initial_hp is not None: self.total_damage = self.initial_hp
-                        self.hp_val_var.set("0"); final_avg_dpm = (self.total_damage / self.accumulated_combat_time) * 60; self.combat_status_var.set("Combat: FINISHED"); self.hud.update_metrics(self.format_combat_time(self.accumulated_combat_time, short=True), 0, final_avg_dpm, self.total_damage, "FINISHED", "00:00")
-                elapsed = time.time() - loop_start; self.perf_var.set(f"Actual Hz: {1.0/max(0.001, elapsed):.1f}"); time.sleep(max(0, interval - elapsed))
+                        self.is_in_combat = False
+                        f_ts = self.last_hp_seen_time + interval
+                        self.accumulated_combat_time += f_ts - self.fight_session_start
+                        self.fight_session_start = None
+                        if self.initial_hp is not None:
+                            self.total_damage = self.initial_hp
+                        self.hp_val_var.set("0")
+                        final_avg_dpm = (
+                            self.total_damage / self.accumulated_combat_time
+                        ) * 60
+                        self.combat_status_var.set("Combat: FINISHED")
+                        self.hud.update_metrics(
+                            self.format_combat_time(
+                                self.accumulated_combat_time, short=True
+                            ),
+                            0,
+                            final_avg_dpm,
+                            self.total_damage,
+                            "FINISHED",
+                            "00:00",
+                        )
+                elapsed = time.time() - loop_start
+                self.perf_var.set(f"Actual Hz: {1.0/max(0.001, elapsed):.1f}")
+                time.sleep(max(0, interval - elapsed))
 
-    def is_outlier(self, hp):
-        if self.last_detected_hp is None: return False
-        if self.last_detected_hp < 500000: return hp > self.last_detected_hp * 1.05
-        if hp < self.last_detected_hp * 0.01: return True
-        if self.last_detected_hp * 1.02 < hp < self.last_detected_hp * 2: return True
+    def is_outlier(self, hp, now):
+        if self.last_detected_hp is None:
+            return False
+        # Rule 1: Reject HP increase over 50,000
+        if hp > self.last_detected_hp + 50000:
+            return True
+
+        # Rule 2: Reject drop rates significantly higher than Average DPS (5x threshold)
+        if self.is_in_combat and hp < self.last_detected_hp and hp > 0:
+            dt = now - self.hp_history[-1][0] if self.hp_history else 0.1
+            drop_rate = (self.last_detected_hp - hp) / max(0.001, dt)
+            avg_dps = getattr(self, "current_avg_dps", 0.0)
+            if avg_dps > 1000 and drop_rate > avg_dps * 5:
+                return True
         return False
 
     def generate_report(self):
         if not self.hp_history:
-            messagebox.showwarning("Warning", "No combat data to report."); return
+            messagebox.showwarning("Warning", "No combat data to report.")
+            return
         try:
             df = pd.DataFrame(self.hp_history, columns=["Timestamp", "HP"])
-            df["Time_Diff"] = df["Timestamp"].diff(); df["HP_Diff"] = df["HP"].shift(1) - df["HP"]; df["RT_DPS"] = df["HP_Diff"] / df["Time_Diff"]
+            df["Time_Diff"] = df["Timestamp"].diff()
+            df["HP_Diff"] = df["HP"].shift(1) - df["HP"]
+            df["RT_DPS"] = df["HP_Diff"] / df["Time_Diff"]
             df = df[df["RT_DPS"] > 0].copy()
-            if df.empty: messagebox.showwarning("Warning", "Not enough damage data for report."); return
-            df["TimeSec"] = df["Timestamp"] - df["Timestamp"].iloc[0]; df["RT_DPS_Smooth"] = df["RT_DPS"].rolling(window=3, center=True).median().fillna(df["RT_DPS"])
-            plt.figure(figsize=(12, 8)); plt.plot(df["TimeSec"], df["RT_DPS_Smooth"], label="Real-time DPS", color="#1976d2", linewidth=2)
-            total_t = self.accumulated_combat_time + (time.time() - self.fight_session_start if (self.is_in_combat and self.fight_session_start) else 0.0)
-            avg_dps = self.total_damage / max(0.1, total_t); plt.axhline(y=avg_dps, color="red", linestyle="--", label="Average DPS"); plt.ylim(0, max(df["RT_DPS_Smooth"].max(), avg_dps) * 1.4); plt.gca().yaxis.set_major_locator(ticker.MultipleLocator(10000)); plt.title("Performance Analytics", fontname=self.font_name, fontsize=16, pad=20); plt.xlabel("Seconds", fontname=self.font_name); plt.ylabel("DPS", fontname=self.font_name); plt.legend(); plt.grid(True, alpha=0.3)
-            summary = (f"{'Combat Time':<19} : {self.format_combat_time(total_t):>15}\n" f"{'Total Damage':<19} : {self.total_damage:>15,}\n" f"{'Average DPS':<19} : {avg_dps:>15,.0f}\n" f"{'Average DPM':<19} : {avg_dps*60:>15,.0f}")
-            plt.text(0.02, 0.98, summary, transform=plt.gca().transAxes, verticalalignment="top", bbox=dict(boxstyle="round,pad=0.8", facecolor="white", edgecolor="gray", alpha=0.9), fontsize=12, family=self.font_name)
-            plt.tight_layout(); fname = f"Pro_Boss_Report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"; plt.savefig(fname, dpi=150); plt.close(); messagebox.showinfo("Success", f"Report saved: {fname}")
-        except Exception as e: messagebox.showerror("Error", str(e))
+            if df.empty:
+                messagebox.showwarning("Warning", "Not enough damage data for report.")
+                return
+            df["TimeSec"] = df["Timestamp"] - df["Timestamp"].iloc[0]
+            df["RT_DPS_Smooth"] = (
+                df["RT_DPS"]
+                .rolling(window=3, center=True)
+                .median()
+                .fillna(df["RT_DPS"])
+            )
+            plt.figure(figsize=(12, 8))
+            plt.plot(
+                df["TimeSec"],
+                df["RT_DPS_Smooth"],
+                label="Real-time DPS",
+                color="#1976d2",
+                linewidth=2,
+            )
+            total_t = self.accumulated_combat_time + (
+                time.time() - self.fight_session_start
+                if (self.is_in_combat and self.fight_session_start)
+                else 0.0
+            )
+            avg_dps = self.total_damage / max(0.1, total_t)
+            plt.axhline(y=avg_dps, color="red", linestyle="--", label="Average DPS")
+            plt.ylim(0, max(df["RT_DPS_Smooth"].max(), avg_dps) * 1.4)
+            plt.gca().yaxis.set_major_locator(ticker.MultipleLocator(10000))
+            plt.title(
+                "Performance Analytics", fontname=self.font_name, fontsize=16, pad=20
+            )
+            plt.xlabel("Seconds", fontname=self.font_name)
+            plt.ylabel("DPS", fontname=self.font_name)
+            plt.legend()
+            plt.grid(True, alpha=0.3)
+            summary = (
+                f"{'Combat Time':<19} : {self.format_combat_time(total_t):>15}\n"
+                f"{'Total Damage':<19} : {self.total_damage:>15,}\n"
+                f"{'Average DPS':<19} : {avg_dps:>15,.0f}\n"
+                f"{'Average DPM':<19} : {avg_dps*60:>15,.0f}"
+            )
+            plt.text(
+                0.02,
+                0.98,
+                summary,
+                transform=plt.gca().transAxes,
+                verticalalignment="top",
+                bbox=dict(
+                    boxstyle="round,pad=0.8",
+                    facecolor="white",
+                    edgecolor="gray",
+                    alpha=0.9,
+                ),
+                fontsize=12,
+                family=self.font_name,
+            )
+            plt.tight_layout()
+            fname = f"Boss_Report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+            plt.savefig(fname, dpi=150)
+            plt.close()
+            messagebox.showinfo("Success", f"Report saved: {fname}")
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
+
 
 if __name__ == "__main__":
-    root = tk.Tk(); app = BossDPSMonitorGUI(root); root.mainloop()
+    root = tk.Tk()
+    app = BossDPSMonitorGUI(root)
+    root.mainloop()
