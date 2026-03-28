@@ -1,4 +1,4 @@
-# MapleStory Boss DPM Monitor: Ultimate Pro Edition
+# MapleStory Boss DPM Monitor
 
 A high-precision, GPU-accelerated combat analytics tool for MapleStory, featuring a real-time HUD overlay and detailed performance reporting.
 
