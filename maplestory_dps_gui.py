@@ -38,9 +38,21 @@ except Exception:
     except Exception:
         pass
 
+# System: Load custom font from file without system installation
+def load_custom_font(font_path):
+    if not os.path.exists(font_path):
+        return False
+    # AddFontResourceEx is a Win32 API to load fonts for the current process
+    FR_PRIVATE = 0x10
+    path_ptr = ctypes.c_wchar_p(font_path)
+    res = ctypes.windll.gdi32.AddFontResourceExW(path_ptr, FR_PRIVATE, 0)
+    return res > 0
+
 # Build: Fix for bundled PyTorch GPU support in frozen executables
 if getattr(sys, "frozen", False):
     bundle_dir = sys._MEIPASS
+    font_file = os.path.join(bundle_dir, "GoogleSans-VariableFont_GRAD,opsz,wght.ttf")
+    load_custom_font(font_file)
     paths_to_add = [
         os.path.join(bundle_dir, "_internal", "torch", "lib"),
         os.path.join(bundle_dir, "_internal"),
@@ -53,6 +65,9 @@ if getattr(sys, "frozen", False):
             except:
                 pass
             os.environ["PATH"] = p + os.pathsep + os.environ["PATH"]
+else:
+    # Load font in dev mode
+    load_custom_font("GoogleSans-VariableFont_GRAD,opsz,wght.ttf")
 
 # Dependencies: Patch torch.load to avoid weights_only issues
 _original_torch_load = torch.load
@@ -360,7 +375,7 @@ class BossDPSMonitorGUI:
         ref_logical_h = REF_H / REF_SCALE
         self.ui_scale = logical_h / ref_logical_h
 
-        self.root.title("MapleStory Boss DPM Monitor v20260329.2")
+        self.root.title("MapleStory Boss DPM Monitor v20260329.5")
         self.root.geometry(f"{win_w}x{win_h}")
 
         self.font_name = "Google Sans"
