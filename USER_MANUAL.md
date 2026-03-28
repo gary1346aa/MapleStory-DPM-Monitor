@@ -12,14 +12,14 @@ Welcome to the **MapleStory Boss DPM Monitor**, a high-precision, GPU-accelerate
 3.  Check the **System Status Bar** at the bottom:
     *   **Engine: Ready** means the OCR is loaded.
     *   **HW: NVIDIA GeForce RTX 3080** (or your GPU) indicates GPU acceleration is active.
-    *   *Note: The premium **Google Sans** font is automatically loaded by the application. No manual installation is required.*
+    *   *Note: The required **Google Sans** font is automatically loaded by the application. No manual installation is required.*
 
 ### Setting Up the Capture
 To track boss health, the app needs to know where the HP bar is:
 1.  Open your MapleStory window.
 2.  In the Monitor's **Configuration** section, select your game window from the dropdown list.
 3.  Click **"Set Capture Region (Crop)"**.
-4.  A screenshot will appear. **Click and drag** a rectangle specifically over the **Boss's Name, numeric HP values, and the percentage** (e.g., "Lucid 12,345,678 (100.0%)").
+4.  A screenshot will appear. **Click and drag** a rectangle specifically over the **Boss's Name, numeric HP values, and the percentage** (e.g., "Pianus 65,000,000 (100%)").
 5.  Press **Escape** or release the mouse to save the region.
 
 ---
