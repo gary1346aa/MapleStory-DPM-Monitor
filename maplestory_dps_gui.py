@@ -21,6 +21,9 @@ import tkinter.font as tkfont
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
+import seaborn as sns
+from scipy.signal import savgol_filter
+from scipy.interpolate import make_interp_spline
 from datetime import datetime, timedelta
 import os
 import ctypes
@@ -349,6 +352,7 @@ class BossDPSMonitorGUI:
         self.last_damage_time = 0
         self.last_detected_hp = None
         self.last_hp_seen_time = 0
+        self.boss_name = "Unknown"
         self.capture_region = None
         self.use_gpu = torch.cuda.is_available()
         self.gpu_name = torch.cuda.get_device_name(0) if self.use_gpu else "CPU Mode"
@@ -508,7 +512,7 @@ class BossDPSMonitorGUI:
     # System: Initialize EasyOCR engine with GPU/CPU support
     def init_ocr(self):
         try:
-            self.reader = easyocr.Reader(["en"], gpu=self.use_gpu)
+            self.reader = easyocr.Reader(["en", "ch_tra"], gpu=self.use_gpu)
             self.status_var.set("Engine: Ready")
         except Exception as e:
             self.status_var.set(f"OCR Error: {str(e)[:20]}")
@@ -614,6 +618,7 @@ class BossDPSMonitorGUI:
         self.is_in_combat = False
         self.last_detected_hp = None
         self.last_hp_seen_time = 0
+        self.boss_name = "Unknown"
         self.hp_val_var.set("-")
         self.rt_dps_val_var.set("-")
         self.rt_dpm_val_var.set("-")
@@ -691,6 +696,20 @@ class BossDPSMonitorGUI:
                     hp = self.parse_hp(full_text)
                     if hp and not self.is_outlier(hp, now):
                         current_hp = hp
+                    
+                    # Engine: Extract Boss Name (non-numeric text)
+                    # We look for strings that don't contain many digits and aren't just punctuation/symbols
+                    name_candidates = [
+                        re.sub(r"[0-9,.\-%/()\[\]]", "", res).strip() for res in results
+                    ]
+                    # Filter out empty or very short noise strings
+                    valid_names = [n for n in name_candidates if len(n) > 1]
+                    if valid_names:
+                        # Keep the longest detected string as the potential boss name
+                        detected_name = max(valid_names, key=len)
+                        if detected_name:
+                            self.boss_name = detected_name
+
                 if current_hp:
                     self.last_hp_seen_time = now
                     if self.last_detected_hp is None:
@@ -797,66 +816,91 @@ class BossDPSMonitorGUI:
             messagebox.showwarning("Warning", "No combat data to report.")
             return
         try:
-            df = pd.DataFrame(self.hp_history, columns=["Timestamp", "HP"])
-            df["Time_Diff"] = df["Timestamp"].diff()
-            df["HP_Diff"] = df["HP"].shift(1) - df["HP"]
-            df["RT_DPS"] = df["HP_Diff"] / df["Time_Diff"]
-            df = df[df["RT_DPS"] > 0].copy()
-            if df.empty:
-                messagebox.showwarning("Warning", "Not enough damage data for report.")
+            # Data: Processing raw history into DPS samples
+            df_raw = pd.DataFrame(self.hp_history, columns=["Timestamp", "HP"])
+            df_raw["TimeSec"] = df_raw["Timestamp"] - df_raw["Timestamp"].iloc[0]
+            df_raw["HP_Diff"] = df_raw["HP"].shift(1) - df_raw["HP"]
+            df_raw["Time_Diff"] = df_raw["Timestamp"].diff()
+            df_raw["RT_DPS"] = (df_raw["HP_Diff"] / df_raw["Time_Diff"]).fillna(0)
+            df_raw = df_raw[df_raw["RT_DPS"] >= 0]
+
+            if len(df_raw) < 5:
+                messagebox.showwarning("Warning", "Not enough data for smoothing.")
                 return
-            df["TimeSec"] = df["Timestamp"] - df["Timestamp"].iloc[0]
-            df["RT_DPS_Smooth"] = (
-                df["RT_DPS"]
-                .rolling(window=3, center=True)
-                .median()
-                .fillna(df["RT_DPS"])
-            )
-            plt.figure(figsize=(12, 8))
-            plt.plot(
-                df["TimeSec"],
-                df["RT_DPS_Smooth"],
-                label="Real-time DPS",
-                color="#1976d2",
-                linewidth=2,
-            )
+
+            # Signal Processing: Advanced Smoothing (Savitzky-Golay + Spline)
+            # 1. Apply Savitzky-Golay to remove noise while preserving burst peaks
+            # Note: We increase the window_len and use a lower polyorder for a smoother curve
+            window_len = min(len(df_raw) // 2, 51)
+            if window_len % 2 == 0:
+                window_len += 1
+            if window_len < 5:
+                window_len = 5
+            smoothed_dps = savgol_filter(df_raw["RT_DPS"], window_len, 2)
+
+            # 2. Resample using Cubic Spline for a continuous, mathematically smooth curve
+            time_new = np.linspace(df_raw["TimeSec"].min(), df_raw["TimeSec"].max(), 500)
+            spline = make_interp_spline(df_raw["TimeSec"], smoothed_dps, k=3)
+            interp_dps = spline(time_new)
+            interp_dps = np.clip(interp_dps, 0, None)  # Ensure no negative DPS
+
+            # Visualization: Styled Seaborn curve plot
+            sns.set_theme(style="whitegrid", font=self.font_name)
+            plt.figure(figsize=(12, 7))
+
+            # Use lineplot with area fill for an attractive "illustration" look
+            sns.lineplot(x=time_new, y=interp_dps, color="#1976d2", linewidth=2.5)
+            plt.fill_between(time_new, interp_dps, color="#1976d2", alpha=0.15)
+
+            # Metrics: Calculate summary stats
             total_t = self.accumulated_combat_time + (
                 time.time() - self.fight_session_start
                 if (self.is_in_combat and self.fight_session_start)
                 else 0.0
             )
             avg_dps = self.total_damage / max(0.1, total_t)
-            plt.axhline(y=avg_dps, color="red", linestyle="--", label="Average DPS")
-            plt.ylim(0, max(df["RT_DPS_Smooth"].max(), avg_dps) * 1.4)
-            plt.gca().yaxis.set_major_locator(ticker.MultipleLocator(10000))
-            plt.title(
-                "Performance Analytics", fontname=self.font_name, fontsize=16, pad=20
+
+            # Reference: Average DPS line
+            plt.axhline(
+                y=avg_dps,
+                color="#D32F2F",
+                linestyle="--",
+                alpha=0.8,
+                label="Average DPS",
             )
-            plt.xlabel("Seconds", fontname=self.font_name)
-            plt.ylabel("DPS", fontname=self.font_name)
-            plt.legend()
-            plt.grid(True, alpha=0.3)
-            summary = (
-                f"{'Combat Time':<19} : {self.format_combat_time(total_t):>15}\n"
-                f"{'Total Damage':<19} : {self.total_damage:>15,}\n"
-                f"{'Average DPS':<19} : {avg_dps:>15,.0f}\n"
-                f"{'Average DPM':<19} : {avg_dps*60:>15,.0f}"
+
+            # Styling: Professional axes and titles
+            plt.title("BOSS DPS/DPM Analysis", fontsize=18, pad=20, weight="bold")
+            plt.xlabel("Combat Duration (Seconds)", fontsize=12)
+            plt.ylabel("Damage Per Second (DPS)", fontsize=12)
+            plt.ylim(0, max(interp_dps.max(), avg_dps) * 1.3)
+            plt.gca().yaxis.set_major_formatter(ticker.StrMethodFormatter("{x:,.0f}"))
+            plt.legend(frameon=True, facecolor="white")
+
+            # Summary: Pill-style text box for overview
+            # Note: We use fixed-width padding to align labels left (<15) and values right (>15)
+            summary_text = (
+                f"{'Combat Time':<15} : {self.format_combat_time(total_t):>15}\n"
+                f"{'Total Damage':<15} : {self.total_damage:>15,}\n"
+                f"{'Average DPS':<15} : {avg_dps:>15,.0f}\n"
+                f"{'Average DPM':<15} : {avg_dps*60:>15,.0f}"
             )
             plt.text(
                 0.02,
-                0.98,
-                summary,
+                0.96,
+                summary_text,
                 transform=plt.gca().transAxes,
                 verticalalignment="top",
+                family="monospace",
+                fontsize=11,
                 bbox=dict(
-                    boxstyle="round,pad=0.8",
+                    boxstyle="round,pad=1",
                     facecolor="white",
-                    edgecolor="gray",
-                    alpha=0.9,
+                    edgecolor="#DDDDDD",
+                    alpha=0.95,
                 ),
-                fontsize=12,
-                family=self.font_name,
             )
+
             plt.tight_layout()
             fname = f"Boss_Report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
             plt.savefig(fname, dpi=150)
