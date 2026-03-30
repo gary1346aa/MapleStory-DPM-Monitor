@@ -11,14 +11,6 @@ A GPU-accelerated combat analytics tool for MapleStory.
 - **Reports**: Generates PNG charts with DPS curves.
 - **UI**: Interface with Google Sans typography and High DPI support.
 
-## Gallery
-
-| | |
-|:---:|:---:|
-| ![Example 1](gallery/Screenshot%202026-03-30%20044122.png) | ![Example 2](gallery/Screenshot%202026-03-30%20045538.png) |
-| ![Example 3](gallery/Screenshot%202026-03-30%20045644.png) | ![Example 4](gallery/Screenshot%202026-03-30%20045816.png) |
-| ![Example 5](gallery/Screenshot%202026-03-30%20131734.png) | ![Example 6](gallery/Screenshot%202026-03-30%20131929.png) |
-
 ## Hotkeys
 
 | Key | Action |
@@ -61,3 +53,11 @@ To generate a standalone executable with GPU support:
 
 ---
 *Developed for the MapleStory community.*
+
+## Gallery
+
+| | |
+|:---:|:---:|
+| ![Example 1](gallery/Screenshot%202026-03-30%20044122.png) | ![Example 2](gallery/Screenshot%202026-03-30%20045538.png) |
+| ![Example 3](gallery/Screenshot%202026-03-30%20045644.png) | ![Example 4](gallery/Screenshot%202026-03-30%20045816.png) |
+| ![Example 5](gallery/Screenshot%202026-03-30%20131734.png) | ![Example 6](gallery/Screenshot%202026-03-30%20131929.png) |
