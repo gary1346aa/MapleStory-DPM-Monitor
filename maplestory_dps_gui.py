@@ -149,7 +149,7 @@ class HUDOverlay(tk.Toplevel):
         self.overrideredirect(True)
         self.apply_borderless_obs_style()
         self.configure(bg="black")
-        self.scale_factor = 1.0
+        self.scale_factor = 0.8
         self.opacity_val = 0.85
         self.attributes("-alpha", self.opacity_val)
         self.font_name = "Google Sans"
@@ -191,7 +191,7 @@ class HUDOverlay(tk.Toplevel):
             "<ButtonRelease-1>", lambda e: self.change_scale(self.scale_slider.get())
         )
         self.trans_slider.set(85)
-        self.scale_slider.set(1.0)
+        self.scale_slider.set(0.8)
 
         # Layout: Main container with padding for drag handle
         self.container = tk.Frame(self, bg="black")
@@ -413,7 +413,6 @@ class BossDPSMonitorGUI:
         self.last_damage_time = 0
         self.last_detected_hp = None
         self.last_hp_seen_time = 0
-        self.boss_name = "Unknown"
         self.capture_region = None
         self.use_gpu = torch.cuda.is_available()
         self.gpu_name = torch.cuda.get_device_name(0) if self.use_gpu else "CPU Mode"
@@ -793,19 +792,6 @@ class BossDPSMonitorGUI:
                     if hp and not self.is_outlier(hp, now):
                         current_hp = hp
 
-                    # Engine: Extract Boss Name (non-numeric text)
-                    # We look for strings that don't contain many digits and aren't just punctuation/symbols
-                    name_candidates = [
-                        re.sub(r"[0-9,.\-%/()\[\]]", "", res).strip() for res in results
-                    ]
-                    # Filter out empty or very short noise strings
-                    valid_names = [n for n in name_candidates if len(n) > 1]
-                    if valid_names:
-                        # Keep the longest detected string as the potential boss name
-                        detected_name = max(valid_names, key=len)
-                        if detected_name:
-                            self.boss_name = detected_name
-
                 if current_hp:
                     self.last_hp_seen_time = now
                     if self.last_detected_hp is None:
@@ -820,15 +806,19 @@ class BossDPSMonitorGUI:
                     if self.is_in_combat:
                         if current_hp < self.last_detected_hp:
                             self.last_damage_time = now
-                        if now - self.last_damage_time >= 3.0:
+                        if now - self.last_damage_time >= 2.0:
                             self.is_in_combat = False
                             self.accumulated_combat_time += (
                                 time.time() - self.fight_session_start
                             )
                             self.fight_session_start = None
                             self.combat_status_var.set("Combat: PAUSED")
+                    
+                    # Only record HP history during active combat to prevent 0 DPS padding
+                    if self.is_in_combat:
+                        self.hp_history.append((now, current_hp))
+                    
                     self.last_detected_hp = current_hp
-                    self.hp_history.append((now, current_hp))
                     if self.initial_hp is not None:
                         self.total_damage = max(0, self.initial_hp - current_hp)
                     total_time = self.accumulated_combat_time + (
@@ -839,15 +829,18 @@ class BossDPSMonitorGUI:
                     self.hp_val_var.set(f"{current_hp:,}")
                     if total_time > 0:
                         past_idx = max(0, len(self.hp_history) - int(5 * target_hz) - 1)
-                        dt_recent = now - self.hp_history[past_idx][0]
-                        rt_dps = (
-                            max(
-                                0,
-                                (self.hp_history[past_idx][1] - current_hp) / dt_recent,
+                        if len(self.hp_history) > past_idx:
+                            dt_recent = now - self.hp_history[past_idx][0]
+                            rt_dps = (
+                                max(
+                                    0,
+                                    (self.hp_history[past_idx][1] - current_hp) / dt_recent,
+                                )
+                                if dt_recent > 0
+                                else 0
                             )
-                            if dt_recent > 0
-                            else 0
-                        )
+                        else:
+                            rt_dps = 0
                         avg_dpm = (self.total_damage / total_time) * 60
                         c_time_str = self.format_combat_time(total_time)
                         rem_sec = (current_hp / (avg_dpm / 60)) if avg_dpm > 0 else 0
@@ -871,7 +864,7 @@ class BossDPSMonitorGUI:
                             "00:00", 0, 0, self.total_damage, "READY", "--:--"
                         )
                 else:
-                    if self.is_in_combat and now - self.last_hp_seen_time >= 3.0:
+                    if self.is_in_combat and now - self.last_hp_seen_time >= 2.0:
                         self.is_in_combat = False
                         f_ts = self.last_hp_seen_time + interval
                         self.accumulated_combat_time += f_ts - self.fight_session_start
@@ -901,8 +894,8 @@ class BossDPSMonitorGUI:
     def is_outlier(self, hp, now):
         if self.last_detected_hp is None:
             return False
-        # Rule 1: Reject HP increase over 50,000 or decrease over 500,000
-        if hp > self.last_detected_hp + 50000 or hp < self.last_detected_hp - 500000:
+        # Rule 1: Reject HP increase over 50,000 or decrease over 2,000,000
+        if hp > self.last_detected_hp + 50000 or hp < self.last_detected_hp - 2000000:
             return True
         return False
 
