@@ -51,9 +51,6 @@ To generate a standalone executable with GPU support:
    ```
    *Note: This creates a virtual environment, installs CUDA-enabled PyTorch, and bundles the app into the `dist/` folder.*
 
----
-*Developed for the MapleStory community.*
-
 ## Gallery
 
 | | |
@@ -61,3 +58,6 @@ To generate a standalone executable with GPU support:
 | ![Example 1](gallery/Screenshot%202026-03-30%20044122.png) | ![Example 2](gallery/Screenshot%202026-03-30%20045538.png) |
 | ![Example 3](gallery/Screenshot%202026-03-30%20045644.png) | ![Example 4](gallery/Screenshot%202026-03-30%20045816.png) |
 | ![Example 5](gallery/Screenshot%202026-03-30%20131734.png) | ![Example 6](gallery/Screenshot%202026-03-30%20131929.png) |
+
+---
+*Developed for the MapleStory community.*
