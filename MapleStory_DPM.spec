@@ -41,7 +41,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='MapleStory_DPM_v20260329.6',
+    name='MapleStory_DPM_v20260331.1',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -60,5 +60,5 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name='MapleStory_DPM_v20260329.6',
+    name='MapleStory_DPM_v20260331.1',
 )

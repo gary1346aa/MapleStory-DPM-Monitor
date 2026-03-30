@@ -375,7 +375,7 @@ class BossDPSMonitorGUI:
         ref_logical_h = REF_H / REF_SCALE
         self.ui_scale = logical_h / ref_logical_h
 
-        self.root.title("MapleStory Boss DPM Monitor v20260329.6")
+        self.root.title("MapleStory Boss DPM Monitor v20260331.1")
         self.root.geometry(f"{win_w}x{win_h}")
 
         self.font_name = "Google Sans"
@@ -532,10 +532,17 @@ class BossDPSMonitorGUI:
         freq_f = ttk.Frame(settings_f)
         freq_f.pack(fill="x", pady=5)
         ttk.Label(freq_f, text="Freq (Hz):").pack(side="left", padx=10)
-        self.freq_var = tk.DoubleVar(value=1.0)
-        ttk.Scale(
-            freq_f, from_=1.0, to=10.0, variable=self.freq_var, orient="horizontal"
-        ).pack(side="left", fill="x", expand=True, padx=10)
+        self.freq_var = tk.IntVar(value=2)
+        # Fix: Add rounding command to ensure integer-only snapping
+        self.freq_scale = ttk.Scale(
+            freq_f,
+            from_=1,
+            to=10,
+            variable=self.freq_var,
+            orient="horizontal",
+            command=lambda v: self.freq_var.set(int(float(v))),
+        )
+        self.freq_scale.pack(side="left", fill="x", expand=True, padx=10)
         ttk.Label(freq_f, textvariable=self.freq_var, width=4).pack(side="left")
         ttk.Label(
             settings_f,
@@ -607,7 +614,7 @@ class BossDPSMonitorGUI:
     # System: Initialize EasyOCR engine with GPU/CPU support
     def init_ocr(self):
         try:
-            self.reader = easyocr.Reader(["en", "ch_tra"], gpu=self.use_gpu)
+            self.reader = easyocr.Reader(["en"], gpu=self.use_gpu)
             self.status_var.set("Engine: Ready")
         except Exception as e:
             self.status_var.set(f"OCR Error: {str(e)[:20]}")
@@ -774,12 +781,15 @@ class BossDPSMonitorGUI:
                         "height": int(win.height * 0.35),
                     }
                 )
-                img = np.array(sct.grab(monitor))
-                img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
+                img_raw = np.array(sct.grab(monitor))
+
+                # Preprocessing: Grayscale conversion only for maximum compatibility
+                # Removed upscaling to reduce load on CPU and entry-level GPU users
+                img_processed = cv2.cvtColor(img_raw, cv2.COLOR_BGRA2GRAY)
 
                 results = []
                 try:
-                    results = self.reader.readtext(img, detail=0)
+                    results = self.reader.readtext(img_processed, detail=0)
                 except Exception as e:
                     with open("debug_ocr_error.txt", "a") as f:
                         f.write(f"[{datetime.now()}] Runtime Error: {str(e)}\n")
@@ -809,15 +819,15 @@ class BossDPSMonitorGUI:
                         if now - self.last_damage_time >= 2.0:
                             self.is_in_combat = False
                             self.accumulated_combat_time += (
-                                time.time() - self.fight_session_start
+                                self.last_damage_time - self.fight_session_start
                             )
                             self.fight_session_start = None
                             self.combat_status_var.set("Combat: PAUSED")
-                    
+
                     # Only record HP history during active combat to prevent 0 DPS padding
                     if self.is_in_combat:
                         self.hp_history.append((now, current_hp))
-                    
+
                     self.last_detected_hp = current_hp
                     if self.initial_hp is not None:
                         self.total_damage = max(0, self.initial_hp - current_hp)
@@ -828,13 +838,15 @@ class BossDPSMonitorGUI:
                     )
                     self.hp_val_var.set(f"{current_hp:,}")
                     if total_time > 0:
-                        past_idx = max(0, len(self.hp_history) - int(5 * target_hz) - 1)
+                        # Real-time DPS: 1-second moving average
+                        past_idx = max(0, len(self.hp_history) - int(1 * target_hz) - 1)
                         if len(self.hp_history) > past_idx:
                             dt_recent = now - self.hp_history[past_idx][0]
                             rt_dps = (
                                 max(
                                     0,
-                                    (self.hp_history[past_idx][1] - current_hp) / dt_recent,
+                                    (self.hp_history[past_idx][1] - current_hp)
+                                    / dt_recent,
                                 )
                                 if dt_recent > 0
                                 else 0
@@ -864,7 +876,7 @@ class BossDPSMonitorGUI:
                             "00:00", 0, 0, self.total_damage, "READY", "--:--"
                         )
                 else:
-                    if self.is_in_combat and now - self.last_hp_seen_time >= 2.0:
+                    if self.is_in_combat and now - self.last_hp_seen_time >= 1.0:
                         self.is_in_combat = False
                         f_ts = self.last_hp_seen_time + interval
                         self.accumulated_combat_time += f_ts - self.fight_session_start

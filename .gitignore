@@ -70,3 +70,5 @@ pathlib.py
 # Gallery
 !gallery/
 !gallery/*.png
+README.pdf
+USER_MANUAL.pdf

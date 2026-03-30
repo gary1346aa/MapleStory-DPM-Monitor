@@ -23,6 +23,12 @@ pip install pyinstaller easyocr seaborn scipy mss keyboard pandas matplotlib pyg
 echo [4/4] Building executable with PyInstaller...
 pyinstaller --noconfirm MapleStory_DPM.spec
 
+:: 5. Copy Manual
+echo [5/5] Adding documentation...
+set "VERSION_VAL="
+for /f "delims=" %%i in (VERSION) do set "VERSION_VAL=%%i"
+copy USER_MANUAL.pdf "dist\MapleStory_DPM_v%VERSION_VAL%\"
+
 echo ======================================================
 echo Build Complete! Check the 'dist' folder.
 echo ======================================================
