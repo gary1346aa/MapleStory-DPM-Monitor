@@ -1,5 +1,17 @@
 # MapleStory Boss DPM Monitor - Release Notes
 
+## v20260331.2
+Release version 20260331.2.
+
+### Improvements
+*   **Auto-Stop Logic**: Monitoring now automatically stops when the combat state reaches "FINISHED".
+*   **Metric Sync**: Both the HUD and main Dashboard now synchronize final results (Time, Damage, DPM) upon boss defeat.
+*   **Stability**: Fixed "Infs or NaNs" error in report generation through improved data sanitization and deduplication.
+*   **UI Tuning**: Frequency slider behavior improved with explicit rounding for consistent integer snapping.
+*   **Maintenance**: Entire codebase formatted with Black and comments standardized.
+
+---
+
 ## v20260331.1
 Release version 20260331.1.
 
