@@ -60,4 +60,4 @@ To generate a standalone executable with GPU support:
 | ![Example 5](gallery/Screenshot%202026-03-30%20131734.png) | ![Example 6](gallery/Screenshot%202026-03-30%20131929.png) |
 
 ---
-*Developed for the MapleStory community.*
+*Developed for the MapleStory Worlds - Artale community.*
