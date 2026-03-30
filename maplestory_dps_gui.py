@@ -48,6 +48,7 @@ def load_custom_font(font_path):
     res = ctypes.windll.gdi32.AddFontResourceExW(path_ptr, FR_PRIVATE, 0)
     return res > 0
 
+
 # Build: Fix for bundled PyTorch GPU support in frozen executables
 if getattr(sys, "frozen", False):
     bundle_dir = sys._MEIPASS
@@ -687,14 +688,7 @@ class BossDPSMonitorGUI:
             self.is_in_combat = False
             self.monitor_status_var.set("Monitoring: OFF")
             self.combat_status_var.set("Combat: IDLE")
-            self.hud.update_metrics(
-                self.format_combat_time(self.accumulated_combat_time, short=True),
-                0,
-                0,
-                self.total_damage,
-                "IDLE",
-                "--:--",
-            )
+            # Note: We NO LONGER update HUD metrics here, preserving the last known values
         else:
             if not self.reader:
                 return
@@ -704,9 +698,11 @@ class BossDPSMonitorGUI:
                 return
             self.target_window = windows[0]
             self.is_monitoring = True
+            # F7 only starts monitoring (READY). Combat ACTIVE triggers on first HP drop.
+            self.is_in_combat = False
+            self.fight_session_start = None
             self.monitor_status_var.set("Monitoring: ON")
-            self.combat_status_var.set("Combat: WAITING")
-            self.hud.update_metrics("00:00", 0, 0, self.total_damage, "READY", "--:--")
+            self.combat_status_var.set("Combat: READY")
             threading.Thread(target=self.monitor_loop, daemon=True).start()
 
     # State: Clear all combat data
@@ -720,7 +716,6 @@ class BossDPSMonitorGUI:
         self.is_in_combat = False
         self.last_detected_hp = None
         self.last_hp_seen_time = 0
-        self.boss_name = "Unknown"
         self.hp_val_var.set("-")
         self.rt_dps_val_var.set("-")
         self.rt_dpm_val_var.set("-")
@@ -729,7 +724,7 @@ class BossDPSMonitorGUI:
         self.avg_dpm_val_var.set("-")
         self.rem_time_val_var.set("--:--:--")
         self.combat_status_var.set(
-            "Combat: WAITING" if self.is_monitoring else "Combat: IDLE"
+            "Combat: READY" if self.is_monitoring else "Combat: IDLE"
         )
         self.hud.update_metrics(
             "00:00", 0, 0, 0, "READY" if self.is_monitoring else "IDLE", "00:00"
@@ -784,7 +779,6 @@ class BossDPSMonitorGUI:
                 img_raw = np.array(sct.grab(monitor))
 
                 # Preprocessing: Grayscale conversion only for maximum compatibility
-                # Removed upscaling to reduce load on CPU and entry-level GPU users
                 img_processed = cv2.cvtColor(img_raw, cv2.COLOR_BGRA2GRAY)
 
                 results = []
@@ -804,90 +798,103 @@ class BossDPSMonitorGUI:
 
                 if current_hp:
                     self.last_hp_seen_time = now
+
+                    # 1. Capture base HP
                     if self.last_detected_hp is None:
                         self.last_detected_hp = current_hp
+
+                    # 2. Trigger ACTIVE combat automatically on first HP drop
                     if not self.is_in_combat and current_hp < self.last_detected_hp:
                         self.is_in_combat = True
                         self.fight_session_start = now
-                        self.last_damage_time = now
-                        if self.initial_hp is None:
-                            self.initial_hp = self.last_detected_hp
+                        self.initial_hp = self.last_detected_hp
+                        # Start history with the state just before the drop
+                        self.hp_history = [(now, self.initial_hp)]
                         self.combat_status_var.set("Combat: ACTIVE")
-                    if self.is_in_combat:
-                        if current_hp < self.last_detected_hp:
-                            self.last_damage_time = now
-                        if now - self.last_damage_time >= 2.0:
-                            self.is_in_combat = False
-                            self.accumulated_combat_time += (
-                                self.last_damage_time - self.fight_session_start
-                            )
-                            self.fight_session_start = None
-                            self.combat_status_var.set("Combat: PAUSED")
 
-                    # Only record HP history during active combat to prevent 0 DPS padding
+                    # 3. Data Collection
                     if self.is_in_combat:
                         self.hp_history.append((now, current_hp))
+                    else:
+                        # While READY, keep a single entry with the current HP and fresh timestamp
+                        self.hp_history = [(now, current_hp)]
 
-                    self.last_detected_hp = current_hp
-                    if self.initial_hp is not None:
+                    # 4. Metric Processing (only while ACTIVE)
+                    if self.is_in_combat:
                         self.total_damage = max(0, self.initial_hp - current_hp)
-                    total_time = self.accumulated_combat_time + (
-                        now - self.fight_session_start
-                        if (self.is_in_combat and self.fight_session_start)
-                        else 0.0
-                    )
-                    self.hp_val_var.set(f"{current_hp:,}")
-                    if total_time > 0:
-                        # Real-time DPS: 1-second moving average
-                        past_idx = max(0, len(self.hp_history) - int(1 * target_hz) - 1)
-                        if len(self.hp_history) > past_idx:
-                            dt_recent = now - self.hp_history[past_idx][0]
-                            rt_dps = (
-                                max(
-                                    0,
-                                    (self.hp_history[past_idx][1] - current_hp)
-                                    / dt_recent,
-                                )
-                                if dt_recent > 0
-                                else 0
+                        total_time = self.accumulated_combat_time + (
+                            now - self.fight_session_start
+                        )
+
+                        # Real-time DPS: 3-second moving average window (or max available)
+                        past_idx = max(0, len(self.hp_history) - int(3 * target_hz) - 1)
+                        dt_recent = now - self.hp_history[past_idx][0]
+                        rt_dps = (
+                            max(
+                                0,
+                                (self.hp_history[past_idx][1] - current_hp) / dt_recent,
                             )
-                        else:
-                            rt_dps = 0
-                        avg_dpm = (self.total_damage / total_time) * 60
+                            if dt_recent > 0
+                            else 0
+                        )
+                        avg_dpm = (self.total_damage / max(interval, total_time)) * 60
+
                         c_time_str = self.format_combat_time(total_time)
                         rem_sec = (current_hp / (avg_dpm / 60)) if avg_dpm > 0 else 0
                         rem_t_str = self.format_combat_time(rem_sec, short=True)
+
                         self.rt_dps_val_var.set(f"{rt_dps:,.0f}")
                         self.rt_dpm_val_var.set(f"{rt_dps * 60:,.0f}")
                         self.combat_time_val_var.set(f"{c_time_str}")
                         self.total_dmg_val_var.set(f"{self.total_damage:,}")
                         self.avg_dpm_val_var.set(f"{avg_dpm:,.0f}")
                         self.rem_time_val_var.set(f"{rem_t_str}")
+
                         self.hud.update_metrics(
                             self.format_combat_time(total_time, short=True),
                             rt_dps,
                             avg_dpm,
                             self.total_damage,
-                            "IN COMBAT" if self.is_in_combat else "READY",
+                            "ACTIVE",
                             rem_t_str,
                         )
                     else:
-                        self.hud.update_metrics(
-                            "00:00", 0, 0, self.total_damage, "READY", "--:--"
-                        )
+                        # Still READY: Just update HP display
+                        self.hud.update_metrics("00:00", 0, 0, 0, "READY", "--:--")
+
+                    self.hp_val_var.set(f"{current_hp:,}")
+                    self.last_detected_hp = current_hp
                 else:
+                    # Auto-Finish: If HP bar is gone for 2 seconds while ACTIVE
                     if self.is_in_combat and now - self.last_hp_seen_time >= 1.0:
                         self.is_in_combat = False
+                        # Original: Finalize time at the last moment the HP was actually seen
                         f_ts = self.last_hp_seen_time + interval
                         self.accumulated_combat_time += f_ts - self.fight_session_start
                         self.fight_session_start = None
+
                         if self.initial_hp is not None:
                             self.total_damage = self.initial_hp
+
                         self.hp_val_var.set("0")
                         final_avg_dpm = (
                             self.total_damage / self.accumulated_combat_time
                         ) * 60
+
+                        # Update Dashboard Variables with final numbers
+                        self.combat_time_val_var.set(
+                            self.format_combat_time(self.accumulated_combat_time)
+                        )
+                        self.total_dmg_val_var.set(f"{self.total_damage:,}")
+                        self.avg_dpm_val_var.set(f"{final_avg_dpm:,.0f}")
+                        self.rt_dps_val_var.set("0")
+                        self.rt_dpm_val_var.set("0")
+                        self.rem_time_val_var.set("00:00:00")
+
                         self.combat_status_var.set("Combat: FINISHED")
+                        self.monitor_status_var.set("Monitoring: OFF")
+                        self.is_monitoring = False  # Auto-stop monitoring
+
                         self.hud.update_metrics(
                             self.format_combat_time(
                                 self.accumulated_combat_time, short=True
@@ -898,6 +905,7 @@ class BossDPSMonitorGUI:
                             "FINISHED",
                             "00:00",
                         )
+
                 elapsed = time.time() - loop_start
                 self.perf_var.set(f"Actual Hz: {1.0/max(0.001, elapsed):.1f}")
                 time.sleep(max(0, interval - elapsed))
@@ -917,16 +925,36 @@ class BossDPSMonitorGUI:
             messagebox.showwarning("Warning", "No combat data to report.")
             return
         try:
-            # Data: Processing raw history into DPS samples
-            df_raw = pd.DataFrame(self.hp_history, columns=["Timestamp", "HP"])
+            # Data: Processing history
+            # Optimization: Filter out points before the actual combat start (if set)
+            if self.fight_session_start is not None:
+                combat_data = [
+                    pt for pt in self.hp_history if pt[0] >= self.fight_session_start
+                ]
+            else:
+                combat_data = self.hp_history
+
+            if not combat_data:
+                messagebox.showwarning("Warning", "No combat data to report.")
+                return
+
+            df_raw = pd.DataFrame(combat_data, columns=["Timestamp", "HP"])
+            # Fix: Deduplicate timestamps to prevent division by zero (resulting in Inf)
+            df_raw = df_raw.drop_duplicates(subset=["Timestamp"])
+
             df_raw["TimeSec"] = df_raw["Timestamp"] - df_raw["Timestamp"].iloc[0]
             df_raw["HP_Diff"] = df_raw["HP"].shift(1) - df_raw["HP"]
             df_raw["Time_Diff"] = df_raw["Timestamp"].diff()
+
+            # Fix: Handle division by zero and clean RT_DPS
             df_raw["RT_DPS"] = (df_raw["HP_Diff"] / df_raw["Time_Diff"]).fillna(0)
+            df_raw = df_raw.replace([np.inf, -np.inf], np.nan).dropna(subset=["RT_DPS"])
             df_raw = df_raw[df_raw["RT_DPS"] >= 0]
 
-            if len(df_raw) < 5:
-                messagebox.showwarning("Warning", "Not enough data for smoothing.")
+            if len(df_raw) < 10:
+                messagebox.showwarning(
+                    "Warning", "Not enough data points for a smooth report."
+                )
                 return
 
             # Signal Processing: Advanced Smoothing (Savitzky-Golay + Spline)
