@@ -66,3 +66,7 @@ startup_check.txt
 *.zip
 *.7z
 pathlib.py
+
+# Gallery
+!gallery/
+!gallery/*.png
