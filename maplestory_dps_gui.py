@@ -38,6 +38,7 @@ except Exception:
     except Exception:
         pass
 
+
 # System: Load custom font from file without system installation
 def load_custom_font(font_path):
     if not os.path.exists(font_path):
@@ -249,9 +250,16 @@ class HUDOverlay(tk.Toplevel):
         ]
         for k, t in zip(keys, txts):
             self.labels[k] = tk.Label(self.container, text=t, **l_s)
-            self.values[k] = tk.Label(
-                self.container, text="0" if k != "stat" else "IDLE", **v_s
-            )
+            # Fix: Ensure Remaining (rem) uses --:-- placeholder initially
+            initial_val = "0"
+            if k == "stat":
+                initial_val = "IDLE"
+            if k == "rem":
+                initial_val = "--:--"
+            if k == "time":
+                initial_val = "00:00"
+
+            self.values[k] = tk.Label(self.container, text=initial_val, **v_s)
             if k == "stat":
                 self.values[k].config(fg="#00FF00")
 
@@ -376,7 +384,7 @@ class BossDPSMonitorGUI:
         ref_logical_h = REF_H / REF_SCALE
         self.ui_scale = logical_h / ref_logical_h
 
-        self.root.title("MapleStory Boss DPM Monitor v20260331.1")
+        self.root.title("MapleStory Boss DPM Monitor v20260331.2")
         self.root.geometry(f"{win_w}x{win_h}")
 
         self.font_name = "Google Sans"
@@ -414,6 +422,7 @@ class BossDPSMonitorGUI:
         self.last_damage_time = 0
         self.last_detected_hp = None
         self.last_hp_seen_time = 0
+        self.rt_start_idx = 0  # O(1) Pointer for current sub-session
         self.capture_region = None
         self.use_gpu = torch.cuda.is_available()
         self.gpu_name = torch.cuda.get_device_name(0) if self.use_gpu else "CPU Mode"
@@ -422,10 +431,10 @@ class BossDPSMonitorGUI:
         self.hp_val_var = tk.StringVar(value="-")
         self.rt_dps_val_var = tk.StringVar(value="-")
         self.rt_dpm_val_var = tk.StringVar(value="-")
-        self.combat_time_val_var = tk.StringVar(value="00:00:00")
+        self.combat_time_val_var = tk.StringVar(value="00:00")
         self.total_dmg_val_var = tk.StringVar(value="-")
         self.avg_dpm_val_var = tk.StringVar(value="-")
-        self.rem_time_val_var = tk.StringVar(value="--:--:--")
+        self.rem_time_val_var = tk.StringVar(value="--:--")
         self.status_var = tk.StringVar(value="Engine: Ready")
         self.monitor_status_var = tk.StringVar(value="Monitoring: OFF")
         self.combat_status_var = tk.StringVar(value="Combat: IDLE")
@@ -679,16 +688,80 @@ class BossDPSMonitorGUI:
                     text="REGION CUSTOM SET", fg="#2E7D32", bg="#E8F5E9"
                 )
 
+    # UI: Centralized logic to calculate and push data to Dashboard and HUD
+    def refresh_metrics_display(self, current_hp, now, status_text):
+        target_hz = self.freq_var.get()
+        interval = 1.0 / target_hz
+
+        total_time = self.accumulated_combat_time
+        if self.is_in_combat and self.fight_session_start:
+            total_time += now - self.fight_session_start
+
+        rt_dps = 0
+        avg_dpm = 0
+        rem_t_str = self.rem_time_val_var.get()  # Default to current value
+
+        if total_time > 0:
+            # Real-time DPS: 3-second moving average window
+            if status_text == "ACTIVE" and self.fight_session_start:
+                # O(1): Look back 3 seconds, but NEVER look past the sub-session start point
+                lookback_idx = max(
+                    self.rt_start_idx, len(self.hp_history) - int(3 * target_hz) - 1
+                )
+
+                if len(self.hp_history) > lookback_idx:
+                    dt_recent = now - self.hp_history[lookback_idx][0]
+                    if dt_recent > 0:
+                        rt_dps = max(
+                            0,
+                            (self.hp_history[lookback_idx][1] - current_hp) / dt_recent,
+                        )
+
+            avg_dpm = (self.total_damage / max(interval, total_time)) * 60
+            if avg_dpm > 0:
+                rem_sec = current_hp / (avg_dpm / 60)
+                rem_t_str = self.format_combat_time(rem_sec, short=True)
+            else:
+                rem_t_str = "--:--"
+
+        # Update Dashboard
+        self.rt_dps_val_var.set(f"{rt_dps:,.0f}")
+        self.rt_dpm_val_var.set(f"{rt_dps * 60:,.0f}")
+        self.combat_time_val_var.set(self.format_combat_time(total_time, short=True))
+        self.total_dmg_val_var.set(f"{self.total_damage:,}")
+        self.avg_dpm_val_var.set(f"{avg_dpm:,.0f}")
+        self.rem_time_val_var.set(rem_t_str)
+        self.hp_val_var.set(f"{current_hp:,}" if current_hp > 0 else "0")
+
+        # Update HUD
+        self.hud.update_metrics(
+            self.format_combat_time(total_time, short=True),
+            rt_dps,
+            avg_dpm,
+            self.total_damage,
+            status_text,
+            rem_t_str,
+        )
+
     # State: Toggle the background monitoring thread
     def toggle_monitoring(self):
+        now = time.time()
         if self.is_monitoring:
             self.is_monitoring = False
             if self.is_in_combat and self.fight_session_start:
-                self.accumulated_combat_time += time.time() - self.fight_session_start
+                self.accumulated_combat_time += now - self.fight_session_start
             self.is_in_combat = False
             self.monitor_status_var.set("Monitoring: OFF")
-            self.combat_status_var.set("Combat: IDLE")
-            # Note: We NO LONGER update HUD metrics here, preserving the last known values
+
+            # Calculate and Sync OFF state: PAUSED if combat started, otherwise back to IDLE
+            off_state = (
+                "PAUSED"
+                if (self.total_damage > 0 or self.accumulated_combat_time > 0)
+                else "IDLE"
+            )
+            self.combat_status_var.set(f"Combat: {off_state}")
+            # Sync to HUD
+            self.refresh_metrics_display(self.last_detected_hp or 0, now, off_state)
         else:
             if not self.reader:
                 return
@@ -698,11 +771,13 @@ class BossDPSMonitorGUI:
                 return
             self.target_window = windows[0]
             self.is_monitoring = True
-            # F7 only starts monitoring (READY). Combat ACTIVE triggers on first HP drop.
+            # F7 only starts monitoring (READY).
             self.is_in_combat = False
             self.fight_session_start = None
             self.monitor_status_var.set("Monitoring: ON")
+
             self.combat_status_var.set("Combat: READY")
+            self.refresh_metrics_display(self.last_detected_hp or 0, now, "READY")
             threading.Thread(target=self.monitor_loop, daemon=True).start()
 
     # State: Clear all combat data
@@ -716,18 +791,20 @@ class BossDPSMonitorGUI:
         self.is_in_combat = False
         self.last_detected_hp = None
         self.last_hp_seen_time = 0
+        self.last_damage_time = 0
         self.hp_val_var.set("-")
         self.rt_dps_val_var.set("-")
         self.rt_dpm_val_var.set("-")
-        self.combat_time_val_var.set("00:00:00")
+        self.combat_time_val_var.set("00:00")
         self.total_dmg_val_var.set("-")
         self.avg_dpm_val_var.set("-")
-        self.rem_time_val_var.set("--:--:--")
+        self.rem_time_val_var.set("--:--")
         self.combat_status_var.set(
             "Combat: READY" if self.is_monitoring else "Combat: IDLE"
         )
+        # Fix: Reset HUD Remaining to --:--
         self.hud.update_metrics(
-            "00:00", 0, 0, 0, "READY" if self.is_monitoring else "IDLE", "00:00"
+            "00:00", 0, 0, 0, "READY" if self.is_monitoring else "IDLE", "--:--"
         )
 
     # Engine: Parse raw text results into numeric HP values
@@ -799,7 +876,7 @@ class BossDPSMonitorGUI:
                 if current_hp:
                     self.last_hp_seen_time = now
 
-                    # 1. Capture base HP
+                    # 1. Capture base HP (only if not already set from a previous session)
                     if self.last_detected_hp is None:
                         self.last_detected_hp = current_hp
 
@@ -807,68 +884,37 @@ class BossDPSMonitorGUI:
                     if not self.is_in_combat and current_hp < self.last_detected_hp:
                         self.is_in_combat = True
                         self.fight_session_start = now
-                        self.initial_hp = self.last_detected_hp
-                        # Start history with the state just before the drop
-                        self.hp_history = [(now, self.initial_hp)]
+                        if self.initial_hp is None:
+                            self.initial_hp = self.last_detected_hp
+
+                        # Start sub-session with fresh history and pointer
+                        self.hp_history = [(now, self.last_detected_hp)]
+                        self.rt_start_idx = 0
                         self.combat_status_var.set("Combat: ACTIVE")
 
                     # 3. Data Collection
                     if self.is_in_combat:
                         self.hp_history.append((now, current_hp))
                     else:
-                        # While READY, keep a single entry with the current HP and fresh timestamp
+                        # While READY, maintain only the single most recent point
                         self.hp_history = [(now, current_hp)]
+                        self.rt_start_idx = 0
 
-                    # 4. Metric Processing (only while ACTIVE)
+                    # 4. Metric Processing
                     if self.is_in_combat:
                         self.total_damage = max(0, self.initial_hp - current_hp)
-                        total_time = self.accumulated_combat_time + (
-                            now - self.fight_session_start
-                        )
-
-                        # Real-time DPS: 3-second moving average window (or max available)
-                        past_idx = max(0, len(self.hp_history) - int(3 * target_hz) - 1)
-                        dt_recent = now - self.hp_history[past_idx][0]
-                        rt_dps = (
-                            max(
-                                0,
-                                (self.hp_history[past_idx][1] - current_hp) / dt_recent,
-                            )
-                            if dt_recent > 0
-                            else 0
-                        )
-                        avg_dpm = (self.total_damage / max(interval, total_time)) * 60
-
-                        c_time_str = self.format_combat_time(total_time)
-                        rem_sec = (current_hp / (avg_dpm / 60)) if avg_dpm > 0 else 0
-                        rem_t_str = self.format_combat_time(rem_sec, short=True)
-
-                        self.rt_dps_val_var.set(f"{rt_dps:,.0f}")
-                        self.rt_dpm_val_var.set(f"{rt_dps * 60:,.0f}")
-                        self.combat_time_val_var.set(f"{c_time_str}")
-                        self.total_dmg_val_var.set(f"{self.total_damage:,}")
-                        self.avg_dpm_val_var.set(f"{avg_dpm:,.0f}")
-                        self.rem_time_val_var.set(f"{rem_t_str}")
-
-                        self.hud.update_metrics(
-                            self.format_combat_time(total_time, short=True),
-                            rt_dps,
-                            avg_dpm,
-                            self.total_damage,
-                            "ACTIVE",
-                            rem_t_str,
-                        )
+                        self.refresh_metrics_display(current_hp, now, "ACTIVE")
                     else:
-                        # Still READY: Just update HP display
-                        self.hud.update_metrics("00:00", 0, 0, 0, "READY", "--:--")
+                        # While READY, show persistent damage but 0 real-time DPS
+                        self.refresh_metrics_display(current_hp, now, "READY")
 
-                    self.hp_val_var.set(f"{current_hp:,}")
                     self.last_detected_hp = current_hp
                 else:
                     # Auto-Finish: If HP bar is gone for 2 seconds while ACTIVE
                     if self.is_in_combat and now - self.last_hp_seen_time >= 1.0:
+                        self.is_monitoring = False  # Auto-stop monitoring
                         self.is_in_combat = False
-                        # Original: Finalize time at the last moment the HP was actually seen
+                        # Original: Finalize time at last moment HP was actually seen
                         f_ts = self.last_hp_seen_time + interval
                         self.accumulated_combat_time += f_ts - self.fight_session_start
                         self.fight_session_start = None
@@ -876,35 +922,11 @@ class BossDPSMonitorGUI:
                         if self.initial_hp is not None:
                             self.total_damage = self.initial_hp
 
-                        self.hp_val_var.set("0")
-                        final_avg_dpm = (
-                            self.total_damage / self.accumulated_combat_time
-                        ) * 60
-
-                        # Update Dashboard Variables with final numbers
-                        self.combat_time_val_var.set(
-                            self.format_combat_time(self.accumulated_combat_time)
-                        )
-                        self.total_dmg_val_var.set(f"{self.total_damage:,}")
-                        self.avg_dpm_val_var.set(f"{final_avg_dpm:,.0f}")
-                        self.rt_dps_val_var.set("0")
-                        self.rt_dpm_val_var.set("0")
-                        self.rem_time_val_var.set("00:00:00")
-
                         self.combat_status_var.set("Combat: FINISHED")
                         self.monitor_status_var.set("Monitoring: OFF")
-                        self.is_monitoring = False  # Auto-stop monitoring
 
-                        self.hud.update_metrics(
-                            self.format_combat_time(
-                                self.accumulated_combat_time, short=True
-                            ),
-                            0,
-                            final_avg_dpm,
-                            self.total_damage,
-                            "FINISHED",
-                            "00:00",
-                        )
+                        # Sync final metrics to UI
+                        self.refresh_metrics_display(0, now, "FINISHED")
 
                 elapsed = time.time() - loop_start
                 self.perf_var.set(f"Actual Hz: {1.0/max(0.001, elapsed):.1f}")
