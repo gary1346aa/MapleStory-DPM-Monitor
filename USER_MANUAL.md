@@ -63,4 +63,4 @@ After your fight, click **"GENERATE PNG REPORT"**.
 *   Reports are saved in the same folder as the application with the name `Boss_Report_YYYYMMDD_HHMMSS.png`.
 
 ---
-*Developed for elite players. Good luck with your bossing!*
+*Developed for the MapleStory - Artale community by G8G.*
