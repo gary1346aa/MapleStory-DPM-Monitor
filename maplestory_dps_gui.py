@@ -384,7 +384,7 @@ class BossDPSMonitorGUI:
         ref_logical_h = REF_H / REF_SCALE
         self.ui_scale = logical_h / ref_logical_h
 
-        self.root.title("MapleStory Boss DPM Monitor v20260331.5")
+        self.root.title("MapleStory Boss DPM Monitor v20260331.6")
         self.root.geometry(f"{win_w}x{win_h}")
 
         self.font_name = "Google Sans"
@@ -879,11 +879,10 @@ class BossDPSMonitorGUI:
                         current_hp = hp
 
                 if current_hp:
-                    self.last_hp_seen_time = now
-
                     # 1. Capture base HP (only if not already set from a previous session)
                     if self.last_detected_hp is None:
                         self.last_detected_hp = current_hp
+                        self.last_hp_seen_time = now
 
                     # 2. Trigger ACTIVE combat automatically on first HP drop
                     if not self.is_in_combat and current_hp < self.last_detected_hp:
@@ -892,50 +891,54 @@ class BossDPSMonitorGUI:
                         if self.initial_hp is None:
                             self.initial_hp = self.last_detected_hp
 
-                        # Start sub-session with fresh history and pointer
-                        self.hp_history = [(now, self.last_detected_hp)]
+                        # Start sub-session with pointer
                         self.rt_start_idx = 0
                         self.combat_status_var.set("Combat: ACTIVE")
 
-                    # 3. Data Collection
+                    # 3. Data Collection & Metric Processing
                     if self.is_in_combat:
                         self.hp_history.append((now, current_hp))
+                        self.total_damage = max(0, self.initial_hp - current_hp)
+                        self.refresh_metrics_display(current_hp, now, "ACTIVE")
                     else:
                         # While READY, maintain only the single most recent point
                         self.hp_history = [(now, current_hp)]
                         self.rt_start_idx = 0
-
-                    # 4. Metric Processing
-                    if self.is_in_combat:
-                        self.total_damage = max(0, self.initial_hp - current_hp)
-                        self.refresh_metrics_display(current_hp, now, "ACTIVE")
-                    else:
-                        # While READY, show persistent damage but 0 real-time DPS
                         self.refresh_metrics_display(current_hp, now, "READY")
 
                     self.last_detected_hp = current_hp
+                    self.last_hp_seen_time = now
                 else:
-                    # Auto-Finish: If HP bar is gone for 2 seconds while ACTIVE
-                    if self.is_in_combat and now - self.last_hp_seen_time >= 1.0:
-                        self.is_monitoring = False  # Auto-stop monitoring
-                        self.is_in_combat = False
-                        # Original: Finalize time at last moment HP was actually seen
-                        f_ts = self.last_hp_seen_time + interval
-                        self.accumulated_combat_time += f_ts - self.fight_session_start
-                        self.fight_session_start = None
-
-                        if self.initial_hp is not None:
-                            self.total_damage = self.initial_hp
-
-                        self.combat_status_var.set("Combat: FINISHED")
-                        self.monitor_status_var.set("Monitoring: OFF")
-
-                        # Sync final metrics to UI
-                        self.refresh_metrics_display(0, now, "FINISHED")
+                    # Auto-Finish: Only if HP bar is gone for 1.0s AND last seen HP was low
+                    if (
+                        self.is_in_combat
+                        and now - self.last_hp_seen_time >= 1.0
+                        and self.last_detected_hp < 500000
+                    ):
+                        self.finalize_combat(now, interval)
 
                 elapsed = time.time() - loop_start
                 self.perf_var.set(f"Actual Hz: {1.0/max(0.001, elapsed):.1f}")
                 time.sleep(max(0, interval - elapsed))
+
+    # State: Finalize combat session and stop monitoring
+    def finalize_combat(self, now, interval):
+        self.is_monitoring = False
+        self.is_in_combat = False
+        # Finalize time at the last moment the HP was actually seen
+        f_ts = self.last_hp_seen_time + interval
+        if self.fight_session_start:
+            self.accumulated_combat_time += f_ts - self.fight_session_start
+        self.fight_session_start = None
+
+        if self.initial_hp is not None:
+            self.total_damage = self.initial_hp
+
+        self.combat_status_var.set("Combat: FINISHED")
+        self.monitor_status_var.set("Monitoring: OFF")
+
+        # Sync final metrics to UI
+        self.refresh_metrics_display(0, now, "FINISHED")
 
     # Engine: Reject visual noise or OCR errors
     def is_outlier(self, hp, now):
@@ -952,20 +955,7 @@ class BossDPSMonitorGUI:
             messagebox.showwarning("Warning", "No combat data to report.")
             return
         try:
-            # Data: Processing history
-            # Optimization: Filter out points before the actual combat start (if set)
-            if self.fight_session_start is not None:
-                combat_data = [
-                    pt for pt in self.hp_history if pt[0] >= self.fight_session_start
-                ]
-            else:
-                combat_data = self.hp_history
-
-            if not combat_data:
-                messagebox.showwarning("Warning", "No combat data to report.")
-                return
-
-            df_raw = pd.DataFrame(combat_data, columns=["Timestamp", "HP"])
+            df_raw = pd.DataFrame(self.hp_history, columns=["Timestamp", "HP"])
             # Fix: Deduplicate timestamps to prevent division by zero (resulting in Inf)
             df_raw = df_raw.drop_duplicates(subset=["Timestamp"])
 
@@ -1073,19 +1063,7 @@ class BossDPSMonitorGUI:
             messagebox.showwarning("Warning", "No combat data to export.")
             return
         try:
-            # Data: Filter points before combat start if available
-            if self.fight_session_start is not None:
-                combat_data = [
-                    pt for pt in self.hp_history if pt[0] >= self.fight_session_start
-                ]
-            else:
-                combat_data = self.hp_history
-
-            if not combat_data:
-                messagebox.showwarning("Warning", "No active combat data to export.")
-                return
-
-            df = pd.DataFrame(combat_data, columns=["UnixTimestamp", "HP"])
+            df = pd.DataFrame(self.hp_history, columns=["UnixTimestamp", "HP"])
             # Format readable time relative to start
             df["TimeSec"] = df["UnixTimestamp"] - df["UnixTimestamp"].iloc[0]
 
