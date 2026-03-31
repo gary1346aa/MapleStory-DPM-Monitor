@@ -1,5 +1,17 @@
 # MapleStory Boss DPM Monitor - Release Notes
 
+## v20260401.1
+Release version 20260401.1.
+
+### Improvements
+*   **Export Raw Data**: Added a dedicated button to export the full combat HP history to a `.csv` file.
+*   **Precision Auto-Finish**: Combat now automatically finalizes if the HP bar is missing for 1.0 second while in the ACTIVE state.
+*   **Atomic UI Sync**: Refined the display engine to ensure the Dashboard and HUD update simultaneously with perfectly matched numbers.
+*   **Optimized OCR**: Switched to single-pass grayscale conversion for maximum compatibility and performance.
+*   **Stable Baseline**: Implemented a fresh starting baseline for every combat session to ensure accurate first-frame DPS.
+
+---
+
 ## v20260331.5
 Release version 20260331.5.
 
