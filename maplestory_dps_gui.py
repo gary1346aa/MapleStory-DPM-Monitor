@@ -603,9 +603,14 @@ class BossDPSMonitorGUI:
             val.grid(row=row_idx, column=1, sticky="e", pady=int(8 * self.ui_scale))
             row_idx += 1
 
+        report_btn_f = ttk.Frame(content)
+        report_btn_f.pack(padx=pad_val, pady=5, fill="x")
         ttk.Button(
-            content, text="GENERATE PNG REPORT", command=self.generate_report
-        ).pack(padx=pad_val, pady=5, fill="x")
+            report_btn_f, text="GENERATE PNG REPORT", command=self.generate_report
+        ).pack(side="left", fill="x", expand=True, padx=(0, 5))
+        ttk.Button(
+            report_btn_f, text="EXPORT RAW DATA (.CSV)", command=self.export_raw_data
+        ).pack(side="left", fill="x", expand=True, padx=(5, 0))
 
         self.refresh_windows()
 
@@ -1059,6 +1064,34 @@ class BossDPSMonitorGUI:
             plt.savefig(fname, dpi=150)
             plt.close()
             messagebox.showinfo("Success", f"Report saved: {fname}")
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
+
+    # Analytics: Export raw HP history to CSV
+    def export_raw_data(self):
+        if not self.hp_history:
+            messagebox.showwarning("Warning", "No combat data to export.")
+            return
+        try:
+            # Data: Filter points before combat start if available
+            if self.fight_session_start is not None:
+                combat_data = [
+                    pt for pt in self.hp_history if pt[0] >= self.fight_session_start
+                ]
+            else:
+                combat_data = self.hp_history
+
+            if not combat_data:
+                messagebox.showwarning("Warning", "No active combat data to export.")
+                return
+
+            df = pd.DataFrame(combat_data, columns=["UnixTimestamp", "HP"])
+            # Format readable time relative to start
+            df["TimeSec"] = df["UnixTimestamp"] - df["UnixTimestamp"].iloc[0]
+
+            fname = f"Combat_Data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+            df.to_csv(fname, index=False)
+            messagebox.showinfo("Success", f"Raw data exported: {fname}")
         except Exception as e:
             messagebox.showerror("Error", str(e))
 
