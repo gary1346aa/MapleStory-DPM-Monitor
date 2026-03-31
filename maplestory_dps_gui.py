@@ -384,7 +384,7 @@ class BossDPSMonitorGUI:
         ref_logical_h = REF_H / REF_SCALE
         self.ui_scale = logical_h / ref_logical_h
 
-        self.root.title("MapleStory Boss DPM Monitor v20260331.2")
+        self.root.title("MapleStory Boss DPM Monitor v20260331.5")
         self.root.geometry(f"{win_w}x{win_h}")
 
         self.font_name = "Google Sans"

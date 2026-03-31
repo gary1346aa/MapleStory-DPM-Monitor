@@ -1,7 +1,7 @@
 # MapleStory Boss DPM Monitor - Release Notes
 
-## v20260331.3
-Release version 20260331.3.
+## v20260331.5
+Release version 20260331.5.
 
 ### Improvements
 *   **O(1) RT_DPS Logic**: Implemented direct pointer-based indexing for real-time DPS. This ensures zero calculation overhead and mathematically eliminates "spikes" when resuming from a pause.
