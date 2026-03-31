@@ -1,5 +1,17 @@
 # MapleStory Boss DPM Monitor - Release Notes
 
+## v20260331.3
+Release version 20260331.3.
+
+### Improvements
+*   **O(1) RT_DPS Logic**: Implemented direct pointer-based indexing for real-time DPS. This ensures zero calculation overhead and mathematically eliminates "spikes" when resuming from a pause.
+*   **Smart HUD States**: Refined the transition between READY, PAUSED, and IDLE. HUD now intelligently chooses the correct state when monitoring is toggled.
+*   **Atomic UI Sync**: Unified the update engine to ensure the Dashboard and HUD are always perfectly in sync with identical numbers.
+*   **Unified Formatting**: All time-related fields across the entire application now strictly use the compact **MM:SS** format.
+*   **Fixed Placeholders**: "Remaining Time" on the HUD now correctly defaults to **--:--** on startup.
+
+---
+
 ## v20260331.2
 Release version 20260331.2.
 
