@@ -1,5 +1,17 @@
 # MapleStory Boss DPM Monitor - Release Notes
 
+## v20260403.2
+Release version 20260403.2.
+
+### Improvements
+*   **Central State Engine**: Replaced hardcoded string logic with a robust `CombatState` Enum (IDLE, READY, ACTIVE, PAUSED, FINISHED) for more stable and predictable monitoring.
+*   **Complete Multilingual Sync**: All UI components, including the Dashboard, HUD, and Status Bar, now synchronize their translations and prefixes (e.g., "Combat:", "Engine:") instantly upon language switch.
+*   **Pixel-Perfect Layout Normalization**: Implemented internal padding (`ipady`) and additive vertical offsets to ensure identical physical height and row positioning across both **Google Sans** (English) and **Noto Sans TC** (Chinese).
+*   **Dynamic Localization Dictionary**: Variableized all vocabulary into `languages.py` for easy future translation and cleaner maintenance.
+*   **Typography Cleanup**: Locked the Chinese rendering to the clean **Noto Sans TC** system and removed redundant font loading logic.
+
+---
+
 ## v20260401.3
 Release version 20260401.3.
 
