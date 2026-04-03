@@ -78,12 +78,10 @@ def load_custom_font(font_path):
 
 # Build: Asset path resolution and dynamic DLL loading for PyTorch
 en_font_fn = "GoogleSans-VariableFont_GRAD,opsz,wght.ttf"
-zh_font_fn = "PingFang TC Regular.ttf"
 
 if getattr(sys, "frozen", False):
     bundle_dir = sys._MEIPASS
     load_custom_font(os.path.join(bundle_dir, en_font_fn))
-    load_custom_font(os.path.join(bundle_dir, zh_font_fn))
     paths_to_add = [
         os.path.join(bundle_dir, "_internal", "torch", "lib"),
         os.path.join(bundle_dir, "_internal"),
@@ -98,7 +96,6 @@ if getattr(sys, "frozen", False):
             os.environ["PATH"] = p + os.pathsep + os.environ["PATH"]
 else:
     load_custom_font(en_font_fn)
-    load_custom_font(zh_font_fn)
 
 # Dependencies: Patch torch.load to maintain weights_only compatibility
 _original_torch_load = torch.load
