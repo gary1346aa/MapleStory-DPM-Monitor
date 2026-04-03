@@ -28,8 +28,7 @@ echo [5/5] Adding documentation...
 set "VERSION_VAL="
 for /f "delims=" %%i in (VERSION) do set "VERSION_VAL=%%i"
 copy USER_MANUAL.pdf "dist\MapleStory_DPM_v%VERSION_VAL%\" 2>nul
-copy USER_MANUAL.md "dist\MapleStory_DPM_v%VERSION_VAL%\"
-copy USER_MANUAL_ZH.md "dist\MapleStory_DPM_v%VERSION_VAL%\"
+copy USER_MANUAL_ZH.pdf "dist\MapleStory_DPM_v%VERSION_VAL%\" 2>nul
 
 echo ======================================================
 echo Build Complete! Check the 'dist' folder.
