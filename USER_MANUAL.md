@@ -12,7 +12,7 @@ Welcome to the **MapleStory Boss DPM Monitor**, a high-precision, GPU-accelerate
 3.  Check the **System Status Bar** at the bottom:
     *   **Engine: Ready** means the OCR is loaded.
     *   **HW: NVIDIA GeForce RTX 3080** (or your GPU) indicates GPU acceleration is active.
-    *   *Note: The required **Google Sans** font is automatically loaded by the application. No manual installation is required.*
+    *   *Note: The required fonts (**Google Sans** and **Noto Sans TC**) are automatically loaded by the application. No manual installation is required.*
 
 ### Setting Up the Capture
 To track boss health, the app needs to know where the HP bar is:
@@ -35,14 +35,14 @@ To track boss health, the app needs to know where the HP bar is:
 ### The HUD Overlay
 *   **Transparency (Left Slider)**: Slide up to make the HUD more solid, or down to make it more transparent.
 *   **Scale (Right Slider)**: Adjust the size of the HUD to fit your screen resolution.
-*   **Dragging**: Click and drag the **top area** of the HUD to move it anywhere on your screen.
+*   **Dragging**: Click and drag the **any area** of the HUD to move it anywhere on your screen.
 
 ---
 
 ## 📊 3. Understanding the Metrics
 
 *   **Remaining HP**: The last detected health of the boss.
-*   **Real-time DPS**: Your damage per second calculated over the last few frames.
+*   **Real-time DPS**: Your damage per second calculated over a rolling 3-second window.
 *   **Combat Time**: Total time spent actively dealing damage.
 *   **Total Damage**: Sum of all HP lost by the boss since the start.
 *   **Average DPM**: Your overall performance (Damage Per Minute).
@@ -52,8 +52,8 @@ To track boss health, the app needs to know where the HP bar is:
 ## 🛡️ 4. Smart Analytics (Outlier Protection)
 The monitor includes intelligent logic to filter out "visual noise" and OCR glitches:
 *   **HP Jitter Filter**: If the boss's HP suddenly "increases" by more than 50,000, the data is ignored.
-*   **Glitched Drop Filter**: If the HP drops by more than 500,000 in a single frame (faster than physically possible), it is ignored.
-*   **Auto-Finish**: If the HP bar disappears for more than 3 seconds, the app assumes the boss is defeated and marks the combat as **FINISHED**.
+*   **Glitched Drop Filter**: If the HP drops by more than 2,000,000 in a single frame (faster than physically possible), it is ignored.
+*   **Auto-Finish**: If the HP bar disappears for more than **1.0 second** while the boss is at low health, the app assumes the boss is defeated and marks the combat as **FINISHED**.
 
 ---
 
