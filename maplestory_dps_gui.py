@@ -432,7 +432,7 @@ class BossDPSMonitorGUI:
         # Vars: Global state and localization
         self.lang = "zh"
         v = LANGUAGES[self.lang]
-        self.root.title(v["title"] + f" v20260401.3")
+        self.root.title(v["title"] + f" v20260403.5")
         self.root.geometry(f"{win_w}x{win_h}")
 
         self.font_name = "Noto Sans TC" if self.lang == "zh" else "Google Sans"
@@ -677,7 +677,7 @@ class BossDPSMonitorGUI:
         style.configure("TCombobox", font=st_f)
 
         # UI: Title and Frame labels
-        self.root.title(v["title"] + f" v20260401.3")
+        self.root.title(v["title"] + f" v20260403.5")
         self.settings_f.config(text=v["config_frame"])
         self.dash_f.config(text=v["dashboard_frame"])
 
